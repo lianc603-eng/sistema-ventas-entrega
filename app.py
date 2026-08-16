@@ -7,9 +7,10 @@ import pdf_nota
 
 st.set_page_config(page_title="Plataforma Comercial Multi-Giro", layout="wide", page_icon="⚡")
 
-# Configuración de tu SaaS
-WHATSAPP_ADMIN = "529817360428"  # Tu WhatsApp para activaciones y propuestas
+# Configuración comercial
+WHATSAPP_ADMIN = "529817360428"  # Tu WhatsApp de contacto comercial
 URL_APP_PUBLICA = "https://sistema-ventas-entrega-hoymebvstqvqbtgfbneqy9.streamlit.app"
+LIMITE_NOTAS_FREE = 5             # Límite ajustado a 5 notas al mes para el Plan FREE
 LIMITE_EMPRENDIMIENTOS_PRO = 4
 
 if "autenticado" not in st.session_state:
@@ -171,7 +172,7 @@ CATALOGO_GIROS = {
 }
 
 # =========================================================
-# VISTA 1: ACCESO, REGISTRO GOOGLE Y MODO DEMO RÁPIDO
+# VISTA: ACCESO, REGISTRO GOOGLE Y MODO DEMO
 # =========================================================
 if not st.session_state.autenticado:
     st.markdown("<h1 style='text-align: center;'>⚡ Sistema Comercial Multi-Giro & Generador de Notas</h1>", unsafe_allow_html=True)
@@ -180,7 +181,6 @@ if not st.session_state.autenticado:
 
     col_demo1, col_demo2, col_demo3 = st.columns([1, 1.4, 1])
     with col_demo2:
-        # Botón de Prueba Rápida sin Registro para prospectos
         st.markdown("""
         <div style="background: linear-gradient(135deg, #EEF2FF 0%, #E0E7FF 100%); border: 1px solid #C7D2FE; border-radius: 10px; padding: 14px 18px; text-align: center; margin-bottom: 20px;">
             <span style="font-size: 16px; font-weight: bold; color: #3730A3;">✨ ¿Quieres probar el sistema ahora mismo?</span><br>
@@ -242,11 +242,10 @@ if not st.session_state.autenticado:
                 
                 if st.form_submit_button("🔴 Continuar con Google (Prueba PRO 24h)", type="primary", use_container_width=True):
                     if g_email.strip() and "@" in g_email and g_nom.strip():
-                        # Intentar login automático o registrar si es nuevo
                         user_id = g_email.split("@")[0].lower()
                         pwd_auto = "google_auth_pass"
                         
-                        with st.spinner("Conectando con Google y Google Sheets..."):
+                        with st.spinner("Conectando con Google Sheets..."):
                             res_login = db.login_usuario(user_id, pwd_auto)
                             if res_login.get("status") == "success":
                                 st.session_state.autenticado = True
@@ -254,7 +253,6 @@ if not st.session_state.autenticado:
                                 st.session_state.lista_emprendimientos = db.obtener_emprendimientos(user_id)
                                 st.rerun()
                             else:
-                                # Registro automático con 1 día de prueba PRO
                                 res_reg = db.registrar_google({
                                     "usuario": user_id,
                                     "password": pwd_auto,
@@ -277,7 +275,7 @@ if not st.session_state.autenticado:
                         st.error("Ingresa un correo de Google válido y el nombre de tu marca.")
 
         with tab_registro:
-            st.info("🎁 **Al registrarte obtienes Acceso Total PRO por 1 día** (Subida de logo, múltiples marcas, desglose de IVA y comprobantes ilimitados).")
+            st.info("🎁 **Al registrarte obtienes Acceso Total PRO por 1 día** (Subida de logo, múltiples marcas, desglose de IVA y notas ilimitadas). Al vencer, conservas tu Plan FREE con 5 notas al mes.")
             with st.form("form_auto_registro"):
                 r_nom = st.text_input("Nombre de tu Emprendimiento", placeholder="Ej: Creaciones Dulces")
                 r_giro = st.selectbox("Giro Comercial", list(CATALOGO_GIROS.keys()), key="giro_reg")
@@ -308,10 +306,9 @@ if not st.session_state.autenticado:
 # =========================================================
 u = st.session_state.usuario_activo
 es_admin = (u.get("rol") == "ADMIN")
-plan = u.get("plan", "TRIAL_PRO")
+plan = u.get("plan", "FREE")
 es_demo = st.session_state.modo_demo
 
-# Lista de marcas / emprendimientos
 emprendimientos_usuario = st.session_state.lista_emprendimientos
 if not emprendimientos_usuario:
     emprendimientos_usuario = [{
@@ -320,19 +317,23 @@ if not emprendimientos_usuario:
         "telefono": u.get("telefono", "")
     }]
 
-# =========================================================
-# BARRA SUPERIOR DE ESTADO
-# =========================================================
+# Barra superior de estado
 c_top1, c_top2 = st.columns([3, 1])
 with c_top1:
     if es_admin:
         st.info(f"👑 **Super Administrador:** `{u['usuario']}` | **Acceso Ilimitado Total** | Gestión de Licencias Activa")
     elif es_demo:
-        st.warning("🚀 **Modo Demo Interactivo** — Estás probando la versión PRO. Para guardar tus notas en la nube, crea tu cuenta gratuita.")
+        st.warning("🚀 **Modo Demo Interactivo** — Estás probando la versión PRO. Crea tu cuenta para guardar datos.")
     else:
-        badge_plan = "🔥 Plan PRO Mensual" if plan == "PRO" else "⏳ Prueba PRO (1 Día)"
+        if plan == "PRO":
+            badge_plan = "🔥 Plan PRO (Ilimitado - 4 Marcas)"
+        elif plan == "TRIAL_PRO":
+            badge_plan = "⏳ Prueba PRO (24 Horas)"
+        else:
+            badge_plan = f"🌱 Plan FREE ({LIMITE_NOTAS_FREE} notas/mes)"
+            
         color_st = "green" if u.get("estado") == "ACTIVA" else "red"
-        st.markdown(f"🏢 **{u['nombre_comercial']}** | {badge_plan} | Estado: :{color_st}[**{u.get('estado', 'ACTIVA')}**] | Vence: `{u.get('fecha_vencimiento')}`")
+        st.markdown(f"🏢 **{u['nombre_comercial']}** | {badge_plan} | Estado: :{color_st}[**{u.get('estado', 'ACTIVA')}**]")
 
 with c_top2:
     if st.button("🚪 Cerrar Sesión / Salir", use_container_width=True):
@@ -343,34 +344,26 @@ with c_top2:
         st.rerun()
 
 # =========================================================
-# BLOQUEO SI EXPIRÓ LA PRUEBA DE 1 DÍA O MENSUALIDAD
+# BANNER UPGRADE A PRO PARA CUENTAS FREE
 # =========================================================
-if not es_admin and not es_demo and u.get("estado") == "SUSPENDIDA":
-    mensaje_wsp_renovacion = f"¡Hola! Soy {u.get('usuario')} ({u.get('nombre_comercial')}). Mi prueba de 1 día / suscripción PRO ha expirado y quiero contratar el plan mensual para continuar emitiendo mis notas."
-    link_wsp_renovacion = f"https://wa.me/{WHATSAPP_ADMIN}?text={urllib.parse.quote(mensaje_wsp_renovacion)}"
+if plan == "FREE" and not es_admin and not es_demo:
+    mensaje_wsp = f"¡Hola! Soy {u.get('usuario')} ({u.get('nombre_comercial')}). Me interesa activar el Plan PRO ($199 MXN) para tener notas ilimitadas, subir mi logo y registrar mis 4 emprendimientos."
+    link_wsp = f"https://wa.me/{WHATSAPP_ADMIN}?text={urllib.parse.quote(mensaje_wsp)}"
     
-    st.error("⚠️ **Tu periodo de prueba PRO de 1 día ha concluido.**")
     st.markdown(f"""
-    <div style="background-color: #FEF2F2; border: 1px solid #F87171; border-radius: 8px; padding: 16px; margin-top: 10px;">
-        <h4 style="color: #991B1B; margin: 0 0 8px 0;">🚀 Continúa emitiendo comprobantes sin interrupciones</h4>
-        <p style="color: #7F1D1D; font-size: 14px; margin: 0 0 12px 0;">
-            Activa tu suscripción mensual para seguir disfrutando de:
-            <ul>
-                <li>Emisión ilimitada de notas de venta y remisiones en PDF.</li>
-                <li>Gestión de hasta 4 emprendimientos o marcas independientes.</li>
-                <li>Personalización total con tu logotipo y colores.</li>
-                <li>Sincronización continua con tu base de datos en Google Sheets.</li>
-            </ul>
-        </p>
-        <a href="{link_wsp_renovacion}" target="_blank" style="background-color: #25D366; color: white; padding: 8px 18px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">
-            💬 Contactar por WhatsApp para Activar Suscripción Mensual
-        </a>
+    <div style="background-color: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 12px 18px; margin-bottom: 15px;">
+        <span style="font-size: 15px; font-weight: 600; color: #92400E;">⭐ Estás en el Plan Gratuito (Límite: {LIMITE_NOTAS_FREE} notas al mes)</span><br>
+        <span style="font-size: 13px; color: #B45309;">¿Necesitas emitir notas ilimitadas, colocar tu logotipo y registrar hasta 4 marcas?</span>
+        <div style="margin-top: 8px;">
+            <a href="{link_wsp}" target="_blank" style="background-color: #25D366; color: white; padding: 6px 14px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block;">
+                💬 Contactar por WhatsApp para Activar Plan PRO ($199 MXN)
+            </a>
+        </div>
     </div>
     """, unsafe_allow_html=True)
-    st.stop()
 
 # =========================================================
-# 💬 CANAL DE FEEDBACK Y PROPUESTAS DE MEJORA
+# CANAL DE FEEDBACK Y PROPUESTAS DE MEJORA
 # =========================================================
 with st.expander("💬 ¿Tienes alguna propuesta de mejora, duda o sugerencia? Escríbenos aquí", expanded=False):
     col_fb1, col_fb2 = st.columns([1.2, 0.8])
@@ -388,7 +381,7 @@ with st.expander("💬 ¿Tienes alguna propuesta de mejora, duda o sugerencia? E
                             "comentario": comentario_propuesta.strip(),
                             "contacto": contacto_propuesta.strip()
                         })
-                    st.success("¡Gracias por tu mensaje! Tu sugerencia ha sido recibida por el equipo de desarrollo.")
+                    st.success("¡Gracias por tu mensaje! Tu sugerencia ha sido enviada al desarrollador.")
                 else:
                     st.warning("Por favor escribe tu propuesta antes de enviar.")
     
@@ -406,21 +399,21 @@ with st.expander("💬 ¿Tienes alguna propuesta de mejora, duda o sugerencia? E
         """, unsafe_allow_html=True)
 
 # =========================================================
-# MENÚ LATERAL: DISEÑO Y GESTIÓN DE MARCAS
+# MENÚ LATERAL: DISEÑO Y MARCAS
 # =========================================================
 with st.sidebar:
     st.header("🏢 Emprendimiento Activo")
     
-    # Selector de marcas
-    if len(emprendimientos_usuario) > 1:
+    es_pro_o_trial = (plan in ["PRO", "TRIAL_PRO"] or es_admin or es_demo)
+
+    if es_pro_o_trial and len(emprendimientos_usuario) > 1:
         nombres_emp = [e["nombre_comercial"] for e in emprendimientos_usuario]
         emp_sel_nombre = st.selectbox("Selecciona la marca a emitir:", nombres_emp)
         emp_activo = next((item for item in emprendimientos_usuario if item["nombre_comercial"] == emp_sel_nombre), emprendimientos_usuario[0])
     else:
         emp_activo = emprendimientos_usuario[0]
 
-    # Dar de alta otro emprendimiento (Hasta 4 marcas)
-    if len(emprendimientos_usuario) < LIMITE_EMPRENDIMIENTOS_PRO and not es_demo:
+    if es_pro_o_trial and len(emprendimientos_usuario) < LIMITE_EMPRENDIMIENTOS_PRO and not es_demo:
         with st.expander("➕ Dar de alta otra marca", expanded=False):
             with st.form("form_add_emp"):
                 add_nom = st.text_input("Nombre de la nueva marca")
@@ -445,8 +438,13 @@ with st.sidebar:
     with st.expander("🏢 Identidad de Marca", expanded=True):
         negocio_nombre = st.text_input("Nombre de la Marca", value=emp_activo.get("nombre_comercial", ""))
         negocio_contacto = st.text_input("WhatsApp / Contacto", value=emp_activo.get("telefono", ""))
-        logo_file = st.file_uploader("Subir Logotipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-        logo_bytes = logo_file.getvalue() if logo_file else None
+        
+        if es_pro_o_trial:
+            logo_file = st.file_uploader("Subir Logotipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
+            logo_bytes = logo_file.getvalue() if logo_file else None
+        else:
+            st.caption("🔒 *Logotipo exclusivo para Plan PRO.*")
+            logo_bytes = None
 
     with st.expander("📝 Textos del Documento", expanded=False):
         titulo_doc = st.text_input("Título", value=preset["titulo"])
@@ -464,8 +462,13 @@ with st.sidebar:
 
     with st.expander("💲 Moneda e Impuestos (IVA)", expanded=True):
         simbolo_moneda = st.selectbox("Moneda", ["$", "MXN $", "USD $", "EUR €"])
-        desglosar_iva = st.toggle("Activar Desglose de IVA / Impuesto", value=False)
-        tasa_iva = st.number_input("Tasa IVA (%)", min_value=0.0, value=16.0) if desglosar_iva else 0.0
+        if es_pro_o_trial:
+            desglosar_iva = st.toggle("Activar Desglose de IVA / Impuesto", value=False)
+            tasa_iva = st.number_input("Tasa IVA (%)", min_value=0.0, value=16.0) if desglosar_iva else 0.0
+        else:
+            st.caption("🔒 *Desglose de IVA disponible en Plan PRO.*")
+            desglosar_iva = False
+            tasa_iva = 0.0
 
     with st.expander("✍️ Firmas de Conformidad", expanded=False):
         mostrar_firmas = st.checkbox("Firmas de conformidad", value=True)
@@ -505,134 +508,153 @@ tabs = st.tabs(titulos_tabs)
 
 # --- PESTAÑA 1: NUEVA VENTA & PREVIEW ---
 with tabs[0]:
-    col_izq, col_der = st.columns([1.1, 0.9])
-    with col_izq:
-        st.subheader(f"1. Datos de Venta ({negocio_nombre})")
-        f1, f2 = st.columns(2)
-        with f1:
-            folio_auto = f"DOC-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
-            folio = st.text_input("Folio / ID", value=folio_auto)
-            cliente = st.text_input("Nombre del Cliente", placeholder="Ej: Juan Pérez")
-            telefono = st.text_input("Teléfono / WhatsApp", placeholder="Ej: 981 123 4567")
-            direccion = st.text_area(lbl_lugar.replace(":", ""), placeholder="Ej: Mostrador o Domicilio")
+    df_propias = db.obtener_ventas(u["usuario"], es_admin=False) if not es_demo else pd.DataFrame()
+    cant_emitidas = len(df_propias)
+    
+    # Verificación de límite de 5 notas en Plan FREE
+    if plan == "FREE" and not es_admin and not es_demo and cant_emitidas >= LIMITE_NOTAS_FREE:
+        st.warning(f"⚠️ Has alcanzado el límite de **{LIMITE_NOTAS_FREE} comprobantes** del Plan FREE.")
+        msg_limite = f"¡Hola! Soy {u.get('usuario')}. Alcancé mi límite de {LIMITE_NOTAS_FREE} notas mensuales en el Plan FREE y quiero activar el Plan PRO ($199 MXN)."
+        link_limite = f"https://wa.me/{WHATSAPP_ADMIN}?text={urllib.parse.quote(msg_limite)}"
+        st.markdown(f"""
+        <div style="margin-top: 10px;">
+            <a href="{link_limite}" target="_blank" style="background-color: #25D366; color: white; padding: 8px 16px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">
+                🚀 Activar Plan PRO Ilimitado por WhatsApp
+            </a>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        col_izq, col_der = st.columns([1.1, 0.9])
+        with col_izq:
+            st.subheader(f"1. Datos de Venta ({negocio_nombre})")
+            if plan == "FREE" and not es_admin and not es_demo:
+                st.caption(f"Comprobantes usados este mes: **{cant_emitidas}/{LIMITE_NOTAS_FREE}** (Plan FREE)")
 
-        with f2:
-            fecha_entrega = st.date_input(lbl_fecha.replace(":", ""), min_value=datetime.date.today())
-            tipo_horario = st.selectbox("Horario", ["Hora específica", "Rango predefinido", "Horario abierto"])
-            if tipo_horario == "Hora específica":
-                hora_sel = st.time_input("Hora", value=datetime.time(12, 0))
-                horario_entrega = hora_sel.strftime("%I:%M %p").lstrip("0")
-            elif tipo_horario == "Rango predefinido":
-                horario_entrega = st.selectbox("Rango", ["09:00 - 12:00", "12:00 - 15:00", "15:00 - 18:00", "18:00 - 21:00"])
-            else:
-                horario_entrega = "Horario abierto"
+            f1, f2 = st.columns(2)
+            with f1:
+                folio_auto = f"DOC-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+                folio = st.text_input("Folio / ID", value=folio_auto)
+                cliente = st.text_input("Nombre del Cliente", placeholder="Ej: Juan Pérez")
+                telefono = st.text_input("Teléfono / WhatsApp", placeholder="Ej: 981 123 4567")
+                direccion = st.text_area(lbl_lugar.replace(":", ""), placeholder="Ej: Mostrador o Domicilio")
 
-            anticipo = st.number_input(f"Anticipo Pagado ({simbolo_moneda})", min_value=0.0, step=50.0)
-            estado_entrega = st.selectbox("Estado", ["Pendiente / Por Entregar", "En Proceso / Ruta", "Completado / Entregado", "Cancelado"])
+            with f2:
+                fecha_entrega = st.date_input(lbl_fecha.replace(":", ""), min_value=datetime.date.today())
+                tipo_horario = st.selectbox("Horario", ["Hora específica", "Rango predefinido", "Horario abierto"])
+                if tipo_horario == "Hora específica":
+                    hora_sel = st.time_input("Hora", value=datetime.time(12, 0))
+                    horario_entrega = hora_sel.strftime("%I:%M %p").lstrip("0")
+                elif tipo_horario == "Rango predefinido":
+                    horario_entrega = st.selectbox("Rango", ["09:00 - 12:00", "12:00 - 15:00", "15:00 - 18:00", "18:00 - 21:00"])
+                else:
+                    horario_entrega = "Horario abierto"
 
-        st.markdown("---")
-        st.subheader("2. Conceptos o Productos")
-        cp1, cp2, cp3, cp4 = st.columns([3, 1, 1, 1])
-        with cp1:
-            prod_nom = st.text_input("Descripción", placeholder=preset["placeholder_prod"])
-        with cp2:
-            prod_cant = st.number_input("Cant.", min_value=1, value=1, step=1)
-        with cp3:
-            prod_precio = st.number_input(f"P. Unit ({simbolo_moneda})", min_value=0.0, step=10.0)
-        with cp4:
-            st.write("")
-            st.write("")
-            if st.button("➕ Agregar"):
-                if prod_nom.strip():
-                    st.session_state.partidas_actuales.append({
-                        "producto": prod_nom.strip(),
-                        "cantidad": int(prod_cant),
-                        "precio_unitario": float(prod_precio),
-                        "subtotal": float(prod_cant * prod_precio)
-                    })
-                    st.rerun()
+                anticipo = st.number_input(f"Anticipo Pagado ({simbolo_moneda})", min_value=0.0, step=50.0)
+                estado_entrega = st.selectbox("Estado", ["Pendiente / Por Entregar", "En Proceso / Ruta", "Completado / Entregado", "Cancelado"])
 
-        partidas_render = st.session_state.partidas_actuales if st.session_state.partidas_actuales else [
-            {"producto": f"Muestra: {preset['placeholder_prod']}", "cantidad": 1, "precio_unitario": 0.0, "subtotal": 0.0}
-        ]
-
-        total_venta = sum(item["subtotal"] for item in partidas_render)
-        saldo_pendiente = max(0.0, total_venta - anticipo)
-        estado_pago = "Liquidado" if saldo_pendiente == 0.0 else ("Anticipo" if anticipo > 0 else "Pendiente")
-
-        if st.session_state.partidas_actuales:
-            st.table(st.session_state.partidas_actuales)
-            btn_guardar, btn_limpiar = st.columns([2, 1])
-            with btn_guardar:
-                if st.button("💾 Guardar y Sincronizar a Google Sheets", type="primary", use_container_width=True):
-                    if not cliente.strip():
-                        st.error("Por favor ingresa el nombre del cliente.")
-                    elif es_demo:
-                        st.info("💡 En Modo Demo no se guardan registros en Google Sheets. ¡Crea tu cuenta gratis para sincronizar!")
-                    else:
-                        cabecera_data = {
-                            "folio": folio,
-                            "fecha_registro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                            "cliente": cliente,
-                            "telefono": telefono if telefono.strip() else "S/N",
-                            "direccion": direccion if direccion.strip() else "Mostrador",
-                            "fecha_entrega": str(fecha_entrega),
-                            "horario_entrega": horario_entrega,
-                            "total": total_venta,
-                            "anticipo": anticipo,
-                            "saldo": saldo_pendiente,
-                            "estado_pago": estado_pago,
-                            "estado_entrega": estado_entrega
-                        }
-                        with st.spinner("Guardando en Google Sheets..."):
-                            db.guardar_registro_venta(u["usuario"], cabecera_data, st.session_state.partidas_actuales)
-                        st.session_state.partidas_actuales = []
-                        st.success(f"¡Venta {folio} guardada en tu Google Sheet!")
+            st.markdown("---")
+            st.subheader("2. Conceptos o Productos")
+            cp1, cp2, cp3, cp4 = st.columns([3, 1, 1, 1])
+            with cp1:
+                prod_nom = st.text_input("Descripción", placeholder=preset["placeholder_prod"])
+            with cp2:
+                prod_cant = st.number_input("Cant.", min_value=1, value=1, step=1)
+            with cp3:
+                prod_precio = st.number_input(f"P. Unit ({simbolo_moneda})", min_value=0.0, step=10.0)
+            with cp4:
+                st.write("")
+                st.write("")
+                if st.button("➕ Agregar"):
+                    if prod_nom.strip():
+                        st.session_state.partidas_actuales.append({
+                            "producto": prod_nom.strip(),
+                            "cantidad": int(prod_cant),
+                            "precio_unitario": float(prod_precio),
+                            "subtotal": float(prod_cant * prod_precio)
+                        })
                         st.rerun()
 
-            with btn_limpiar:
-                if st.button("🗑️ Limpiar", use_container_width=True):
-                    st.session_state.partidas_actuales = []
-                    st.rerun()
+            partidas_render = st.session_state.partidas_actuales if st.session_state.partidas_actuales else [
+                {"producto": f"Muestra: {preset['placeholder_prod']}", "cantidad": 1, "precio_unitario": 0.0, "subtotal": 0.0}
+            ]
 
-    with col_der:
-        st.subheader("👁️ Vista Previa en Vivo")
-        cabecera_preview = {
-            "folio": folio,
-            "cliente": cliente if cliente.strip() else "Nombre del Cliente",
-            "telefono": telefono if telefono.strip() else "000 000 0000",
-            "direccion": direccion if direccion.strip() else "Ubicación / Mostrador",
-            "fecha_entrega": str(fecha_entrega),
-            "horario_entrega": horario_entrega,
-            "total": total_venta,
-            "anticipo": anticipo,
-            "saldo": saldo_pendiente
-        }
-        
-        pdf_bytes_live = pdf_nota.generar_nota_pdf(
-            cabecera_preview, 
-            partidas_render, 
-            config_personalizada=config_pdf_usuario
-        )
-        
-        try:
-            import pypdfium2 as pdfium
-            pdf_doc = pdfium.PdfDocument(pdf_bytes_live)
-            page = pdf_doc.get_page(0)
-            bitmap = page.render(scale=2.0)
-            pil_image = bitmap.to_pil()
-            st.image(pil_image, caption=f"Emprendimiento: {negocio_nombre}", use_container_width=True)
-        except Exception:
-            st.info("💡 Cambia los parámetros del menú lateral y descarga el PDF.")
+            total_venta = sum(item["subtotal"] for item in partidas_render)
+            saldo_pendiente = max(0.0, total_venta - anticipo)
+            estado_pago = "Liquidado" if saldo_pendiente == 0.0 else ("Anticipo" if anticipo > 0 else "Pendiente")
 
-        st.download_button(
-            label=f"📄 Descargar PDF ({simbolo_moneda})",
-            data=pdf_bytes_live,
-            file_name=f"{titulo_doc.replace(' ', '_')}_{folio}.pdf",
-            mime="application/pdf",
-            use_container_width=True,
-            type="primary"
-        )
+            if st.session_state.partidas_actuales:
+                st.table(st.session_state.partidas_actuales)
+                btn_guardar, btn_limpiar = st.columns([2, 1])
+                with btn_guardar:
+                    if st.button("💾 Guardar y Sincronizar a Google Sheets", type="primary", use_container_width=True):
+                        if not cliente.strip():
+                            st.error("Por favor ingresa el nombre del cliente.")
+                        elif es_demo:
+                            st.info("💡 En Modo Demo no se guardan registros en Google Sheets. ¡Crea tu cuenta gratis para sincronizar!")
+                        else:
+                            cabecera_data = {
+                                "folio": folio,
+                                "fecha_registro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                                "cliente": cliente,
+                                "telefono": telefono if telefono.strip() else "S/N",
+                                "direccion": direccion if direccion.strip() else "Mostrador",
+                                "fecha_entrega": str(fecha_entrega),
+                                "horario_entrega": horario_entrega,
+                                "total": total_venta,
+                                "anticipo": anticipo,
+                                "saldo": saldo_pendiente,
+                                "estado_pago": estado_pago,
+                                "estado_entrega": estado_entrega
+                            }
+                            with st.spinner("Guardando en Google Sheets..."):
+                                db.guardar_registro_venta(u["usuario"], cabecera_data, st.session_state.partidas_actuales)
+                            st.session_state.partidas_actuales = []
+                            st.success(f"¡Venta {folio} guardada en tu Google Sheet!")
+                            st.rerun()
+
+                with btn_limpiar:
+                    if st.button("🗑️ Limpiar", use_container_width=True):
+                        st.session_state.partidas_actuales = []
+                        st.rerun()
+
+        with col_der:
+            st.subheader("👁️ Vista Previa en Vivo")
+            cabecera_preview = {
+                "folio": folio,
+                "cliente": cliente if cliente.strip() else "Nombre del Cliente",
+                "telefono": telefono if telefono.strip() else "000 000 0000",
+                "direccion": direccion if direccion.strip() else "Ubicación / Mostrador",
+                "fecha_entrega": str(fecha_entrega),
+                "horario_entrega": horario_entrega,
+                "total": total_venta,
+                "anticipo": anticipo,
+                "saldo": saldo_pendiente
+            }
+            
+            pdf_bytes_live = pdf_nota.generar_nota_pdf(
+                cabecera_preview, 
+                partidas_render, 
+                config_personalizada=config_pdf_usuario
+            )
+            
+            try:
+                import pypdfium2 as pdfium
+                pdf_doc = pdfium.PdfDocument(pdf_bytes_live)
+                page = pdf_doc.get_page(0)
+                bitmap = page.render(scale=2.0)
+                pil_image = bitmap.to_pil()
+                st.image(pil_image, caption=f"Emprendimiento: {negocio_nombre}", use_container_width=True)
+            except Exception:
+                st.info("💡 Cambia los parámetros del menú lateral y descarga el PDF.")
+
+            st.download_button(
+                label=f"📄 Descargar PDF ({simbolo_moneda})",
+                data=pdf_bytes_live,
+                file_name=f"{titulo_doc.replace(' ', '_')}_{folio}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary"
+            )
 
 # --- PESTAÑA 2: CATÁLOGO ---
 with tabs[1]:
@@ -684,12 +706,11 @@ with tabs[2]:
     else:
         st.info("El historial de base de datos se activa al registrar tu cuenta gratuita.")
 
-# --- PESTAÑA 4: PANEL ADMINISTRADOR & COMPARTIR CON PROSPECTOS ---
+# --- PESTAÑA 4: PANEL ADMINISTRADOR & COMPARTIR ---
 if es_admin:
     with tabs[3]:
         st.subheader("👑 Panel Maestro de Control & Herramientas de Cierre")
         
-        # 1. Herramienta para compartir con prospectos
         st.markdown("### 📤 Compartir la Plataforma con Clientes Potenciales")
         c_sh1, c_sh2 = st.columns(2)
         with c_sh1:
@@ -705,8 +726,6 @@ if es_admin:
             """, unsafe_allow_html=True)
 
         st.markdown("---")
-        
-        # 2. Control de usuarios y suscripciones
         st.markdown("### 👥 Control de Usuarios y Licencias")
         df_usuarios = db.admin_obtener_usuarios()
         
