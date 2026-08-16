@@ -1,187 +1,160 @@
 import streamlit as st
-import pandas as pd
-from datetime import datetime, date
-import urllib.parse
-from db import init_db, guardar_registro_venta, obtener_ventas, obtener_detalle_folio
-from pdf_nota import generar_nota_pdf
+import datetime
+import uuid
+import db
 
-st.set_page_config(page_title="Punto de Venta y Entregas", page_icon="📦", layout="wide")
+st.set_page_config(page_title="Gestión de Ventas y Catálogo", layout="wide", page_icon="📦")
 
-init_db()
+# Inicializar tablas al arrancar la app
+db.init_db()
 
-st.title("📦 Sistema de Registro de Ventas y Despacho")
+# Inicializar lista temporal de partidas en la sesión
+if "partidas_actuales" not in st.session_state:
+    st.session_state.partidas_actuales = []
 
-tab_nueva_venta, tab_consultas = st.tabs(["📝 Registrar Venta", "📋 Historial y Entregas"])
+st.title("📦 Sistema de Ventas y Entregas")
 
-# ==================== PESTAÑA 1: NUEVA VENTA ====================
-with tab_nueva_venta:
-    if "articulos_venta" not in st.session_state:
-        st.session_state.articulos_venta = []
+pestana_venta, pestana_producto, pestana_historial = st.tabs([
+    "📝 Nueva Venta", 
+    "🏷️ Catálogo de Productos", 
+    "📊 Historial de Ventas"
+])
 
-    c_izq, c_der = st.columns([1, 1], gap="large")
+# ==========================================
+# 1. PESTAÑA: NUEVA VENTA
+# ==========================================
+with pestana_venta:
+    st.subheader("Datos de la Venta y Entrega")
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        folio_auto = f"V-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
+        folio = st.text_input("Folio", value=folio_auto)
+        cliente = st.text_input("Nombre del Cliente")
+        telefono = st.text_input("Teléfono")
+        direccion = st.text_area("Dirección de Entrega")
 
-    with c_izq:
-        st.subheader("1. Datos del Pedido y Entrega")
-        folio_auto = f"VTA-{datetime.now().strftime('%y%m%d%H%M')}"
-        st.caption(f"Folio de Venta: **{folio_auto}**")
+    with col2:
+        fecha_entrega = st.date_input("Fecha de Entrega", min_value=datetime.date.today())
+        horario_entrega = st.selectbox("Horario de Entrega", [
+            "09:00 - 12:00", 
+            "12:00 - 15:00", 
+            "15:00 - 18:00", 
+            "18:00 - 21:00",
+            "Horario Abierto"
+        ])
+        anticipo = st.number_input("Anticipo pagado ($)", min_value=0.0, step=50.0)
+        estado_entrega = st.selectbox("Estado de Entrega", ["Pendiente", "En Ruta", "Entregado", "Cancelado"])
 
-        cliente = st.text_input("Nombre del Cliente *", placeholder="Ej. Mariana Torres")
+    st.markdown("---")
+    st.subheader("Partidas / Productos de la Venta")
+    
+    # Formulario para agregar productos a la venta actual
+    col_prod, col_cant, col_precio, col_btn = st.columns([3, 1, 1, 1])
+    with col_prod:
+        prod_nombre = st.text_input("Producto")
+    with col_cant:
+        prod_cant = st.number_input("Cantidad", min_value=1, value=1, step=1)
+    with col_precio:
+        prod_precio = st.number_input("Precio Unitario ($)", min_value=0.0, step=10.0)
+    with col_btn:
+        st.write("")
+        st.write("")
+        if st.button("➕ Agregar"):
+            if prod_nombre.strip():
+                st.session_state.partidas_actuales.append({
+                    "producto": prod_nombre.strip(),
+                    "cantidad": int(prod_cant),
+                    "precio_unitario": float(prod_precio),
+                    "subtotal": float(prod_cant * prod_precio)
+                })
+                st.rerun()
+            else:
+                st.warning("Escribe el nombre del producto.")
+
+    # Mostrar tabla con partidas acumuladas
+    if st.session_state.partidas_actuales:
+        st.table(st.session_state.partidas_actuales)
+        total_calculado = sum(item["subtotal"] for item in st.session_state.partidas_actuales)
+        saldo_calculado = max(0.0, total_calculado - anticipo)
         
-        col_t, col_f = st.columns(2)
-        with col_t:
-            telefono = st.text_input("Teléfono / WhatsApp *", placeholder="10 dígitos (ej. 9811234567)")
-        with col_f:
-            fecha_entrega = st.date_input("Día programado de entrega *", min_value=date.today())
+        estado_pago = "Liquidado" if saldo_calculado == 0.0 else ("Anticipo" if anticipo > 0 else "Pendiente")
 
-        col_h, col_d = st.columns(2)
-        with col_h:
-            horario_entrega = st.text_input("Horario pactado", placeholder="Ej. 4:00 PM a 6:00 PM")
-        with col_d:
-            direccion = st.text_input("Lugar / Dirección de entrega", placeholder="Ej. Calle 10 #45 o Entrega en local")
+        st.metric(label="Total de la Venta", value=f"${total_calculado:,.2f}")
+        st.metric(label="Saldo Pendiente", value=f"${saldo_calculado:,.2f}")
 
-        st.divider()
-        st.subheader("2. Agregar Productos a la Venta")
-
-        with st.form("form_articulos", clear_on_submit=True):
-            prod_nombre = st.text_input("Nombre o descripción del producto")
-            col_c, col_p = st.columns(2)
-            with col_c:
-                prod_cant = st.number_input("Cantidad", min_value=1, value=1, step=1)
-            with col_p:
-                prod_precio = st.number_input("Precio Unitario ($)", min_value=0.0, step=10.0, format="%.2f")
-            
-            btn_agregar = st.form_submit_button("➕ Agregar Producto", use_container_width=True)
-            if btn_agregar:
-                if prod_nombre.strip() and prod_precio > 0:
-                    st.session_state.articulos_venta.append({
-                        "producto": prod_nombre.strip(),
-                        "cantidad": int(prod_cant),
-                        "precio_unitario": float(prod_precio),
-                        "subtotal": float(prod_cant * prod_precio)
-                    })
-                    st.rerun()
+        col_guardar, col_limpiar = st.columns([2, 1])
+        with col_guardar:
+            if st.button("💾 Guardar Venta y Sincronizar", type="primary", use_container_width=True):
+                if not cliente.strip():
+                    st.error("Debes ingresar el nombre del cliente.")
                 else:
-                    st.warning("Escribe el nombre del producto y un precio válido mayor a cero.")
+                    cabecera = {
+                        "folio": folio,
+                        "fecha_registro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "cliente": cliente,
+                        "telefono": telefono,
+                        "direccion": direccion,
+                        "fecha_entrega": str(fecha_entrega),
+                        "horario_entrega": horario_entrega,
+                        "total": total_calculado,
+                        "anticipo": anticipo,
+                        "saldo": saldo_calculado,
+                        "estado_pago": estado_pago,
+                        "estado_entrega": estado_entrega
+                    }
+                    
+                    with st.spinner("Guardando en base local y sincronizando a Google Sheets..."):
+                        db.guardar_registro_venta(cabecera, st.session_state.partidas_actuales, sincronizar_cloud=True)
+                    
+                    st.success(f"¡Venta con folio {folio} guardada exitosamente!")
+                    st.session_state.partidas_actuales = []
+                    st.rerun()
 
-    with c_der:
-        st.subheader("3. Desglose, Comprobante y Envío")
-
-        if st.session_state.articulos_venta:
-            df_partidas = pd.DataFrame(st.session_state.articulos_venta)
-            
-            st.dataframe(
-                df_partidas.rename(columns={
-                    "producto": "Producto",
-                    "cantidad": "Cant.",
-                    "precio_unitario": "P. Unitario",
-                    "subtotal": "Subtotal"
-                }),
-                use_container_width=True,
-                hide_index=True
-            )
-
-            if st.button("🗑️ Vaciar Lista"):
-                st.session_state.articulos_venta = []
+        with col_limpiar:
+            if st.button("🗑️ Limpiar Partidas", use_container_width=True):
+                st.session_state.partidas_actuales = []
                 st.rerun()
 
-            total_venta = df_partidas["subtotal"].sum()
-
-            c_tot, c_ant = st.columns(2)
-            with c_tot:
-                st.metric("Total de la Venta", f"${total_venta:,.2f}")
-            with c_ant:
-                anticipo = st.number_input("Anticipo recibido ($)", min_value=0.0, max_value=float(total_venta), value=0.0, step=20.0)
-
-            saldo_pendiente = total_venta - anticipo
-            
-            if saldo_pendiente > 0:
-                st.warning(f"⚠️ Saldo pendiente al entregar: **${saldo_pendiente:,.2f}**")
-            else:
-                st.success("✅ Venta pagada al 100%")
-
-            # Objeto con la información consolidada
-            cabecera_datos = {
-                "folio": folio_auto,
-                "fecha_registro": datetime.now().strftime("%d/%m/%Y %H:%M"),
-                "cliente": cliente.strip(),
-                "telefono": telefono.strip(),
-                "direccion": direccion.strip() if direccion.strip() else "En sucursal / Mostrador",
-                "fecha_entrega": fecha_entrega.strftime("%d/%m/%Y"),
-                "horario_entrega": horario_entrega.strip() if horario_entrega.strip() else "Horario a convenir",
-                "total": float(total_venta),
-                "anticipo": float(anticipo),
-                "saldo": float(saldo_pendiente),
-                "estado_pago": "Pagado" if saldo_pendiente == 0 else "Saldo Pendiente",
-                "estado_entrega": "Pendiente de Entrega"
-            }
-
-            # Generación binaria del PDF
-            pdf_data = generar_nota_pdf(cabecera_datos, st.session_state.articulos_venta)
-
-            st.divider()
-
-            col_guardar, col_descargar = st.columns(2)
-            with col_guardar:
-                if st.button("💾 Registrar Venta en el Sistema", type="primary", use_container_width=True):
-                    if not cliente.strip() or not telefono.strip():
-                        st.error("Es obligatorio capturar nombre y teléfono del cliente.")
-                    else:
-                        guardar_registro_venta(cabecera_datos, st.session_state.articulos_venta)
-                        st.success(f"¡Venta {folio_auto} registrada correctamente!")
-
-            with col_descargar:
-                st.download_button(
-                    label="📄 Descargar Nota de Entrega (PDF)",
-                    data=pdf_data,
-                    file_name=f"Nota_Entrega_{folio_auto}.pdf",
-                    mime="application/pdf",
-                    use_container_width=True
-                )
-
-            # Envío automático por WhatsApp
-            if telefono.strip():
-                clean_tel = "".join(filter(str.isdigit, telefono))
-                if len(clean_tel) == 10:
-                    clean_tel = f"52{clean_tel}"
-
-                articulos_str = "\n".join([f"• {p['cantidad']}x {p['producto']} (${p['subtotal']:,.2f})" for p in st.session_state.articulos_venta])
-                
-                texto_wa = (
-                    f"¡Hola *{cliente}*! Confirmamos el registro de tu compra:\n\n"
-                    f"📄 *Folio:* {folio_auto}\n"
-                    f"📦 *Productos vendidos:*\n{articulos_str}\n\n"
-                    f"💰 *Total:* ${total_venta:,.2f}\n"
-                    f"💵 *Anticipo abonado:* ${anticipo:,.2f}\n"
-                    f"⚠️ *Saldo al recibir:* ${saldo_pendiente:,.2f}\n\n"
-                    f"📅 *Día pactado de entrega:* {fecha_entrega.strftime('%d/%m/%Y')}\n"
-                    f"⏰ *Horario:* {cabecera_datos['horario_entrega']}\n"
-                    f"📍 *Punto de entrega:* {cabecera_datos['direccion']}\n\n"
-                    f"Te adjuntamos el comprobante formal en PDF. ¡Muchas gracias por tu compra!"
-                )
-                
-                url_wa = f"https://wa.me/{clean_tel}?text={urllib.parse.quote(texto_wa)}"
-                st.link_button("📲 Enviar Detalle al Cliente por WhatsApp", url_wa, use_container_width=True)
-
-        else:
-            st.info("Agrega los productos en el panel izquierdo para generar el desglose y la nota de entrega.")
-
-# ==================== PESTAÑA 2: HISTORIAL ====================
-with tab_consultas:
-    st.subheader("Ventas Registradas y Entregas Programadas")
-    df_todas = obtener_ventas()
-    
-    if not df_todas.empty:
-        st.dataframe(
-            df_todas[["folio", "fecha_registro", "cliente", "telefono", "fecha_entrega", "total", "saldo", "estado_pago"]],
-            use_container_width=True,
-            hide_index=True
-        )
+# ==========================================
+# 2. PESTAÑA: CATÁLOGO DE PRODUCTOS
+# ==========================================
+with pestana_producto:
+    st.subheader("Registrar Nuevo Producto al Catálogo")
+    with st.form("form_producto"):
+        p_nombre = st.text_input("Nombre del Producto")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            p_costo = st.number_input("Costo Base ($)", min_value=0.0, step=10.0)
+        with c2:
+            p_margen = st.number_input("Margen (%)", min_value=0.0, value=30.0, step=5.0)
+        with c3:
+            precio_sugerido = p_costo * (1 + p_margen / 100)
+            p_venta = st.number_input("Precio de Venta Final ($)", value=float(precio_sugerido), step=10.0)
         
-        st.divider()
-        folio_sel = st.selectbox("Seleccionar Folio para ver desglose de productos:", df_todas["folio"].tolist())
-        if folio_sel:
-            detalle_df = obtener_detalle_folio(folio_sel)
-            st.write(f"**Partidas del folio {folio_sel}:**")
-            st.dataframe(detalle_df, hide_index=True, use_container_width=True)
+        btn_prod = st.form_submit_button("Guardar en Catálogo")
+        if btn_prod:
+            if p_nombre.strip():
+                with st.spinner("Guardando producto..."):
+                    db.guardar_producto(p_nombre.strip(), p_costo, p_margen, p_venta, sincronizar_cloud=True)
+                st.success(f"Producto '{p_nombre}' guardado y sincronizado a Google Sheets.")
+            else:
+                st.error("El nombre del producto no puede estar vacío.")
+
+# ==========================================
+# 3. PESTAÑA: HISTORIAL DE VENTAS
+# ==========================================
+with pestana_historial:
+    st.subheader("Ventas Registradas (SQLite Local)")
+    df_ventas = db.obtener_ventas()
+    
+    if df_ventas.empty:
+        st.info("No hay ventas registradas aún.")
     else:
-        st.write("No hay ventas registradas en la base de datos todavía.")
+        st.dataframe(df_ventas, use_container_width=True)
+        
+        folio_sel = st.selectbox("Selecciona un Folio para ver su detalle:", df_ventas["folio"].tolist())
+        if folio_sel:
+            st.write(f"**Partidas del folio:** `{folio_sel}`")
+            df_detalle = db.obtener_detalle_folio(folio_sel)
+            st.table(df_detalle)
