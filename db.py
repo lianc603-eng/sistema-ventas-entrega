@@ -24,6 +24,20 @@ def registrar_usuario(usuario_data: dict):
 def login_usuario(usuario: str, password: str):
     return request_cloud({"tipo": "login", "usuario": usuario, "password": password})
 
+# --- EMPRENDIMIENTOS (PLAN PRO MULTI-MARCA) ---
+def obtener_emprendimientos(usuario: str):
+    res = request_cloud({"tipo": "obtener_emprendimientos", "usuario": usuario})
+    if res.get("status") == "success" and res.get("data"):
+        return res["data"]
+    return []
+
+def guardar_emprendimiento(usuario: str, emprendimiento: dict):
+    return request_cloud({
+        "tipo": "guardar_emprendimiento",
+        "usuario": usuario,
+        "emprendimiento": emprendimiento
+    })
+
 # --- OPERACIONES COMERCIALES ---
 def guardar_registro_venta(usuario_activo: str, cabecera: dict, partidas: list):
     return request_cloud({
@@ -53,16 +67,18 @@ def obtener_detalle_folio(folio: str):
     return pd.DataFrame()
 
 # --- MÓDULO ADMINISTRADOR ---
-def admin_obtener_negocios():
-    res = request_cloud({"tipo": "admin_obtener_negocios"})
+def admin_obtener_usuarios():
+    res = request_cloud({"tipo": "admin_obtener_usuarios"})
     if res.get("status") == "success" and res.get("data"):
         return pd.DataFrame(res["data"])
     return pd.DataFrame()
 
-def admin_actualizar_suscripcion(usuario: str, dias_sumar: int, nuevo_estado: str):
+def admin_actualizar_plan_suscripcion(usuario: str, nuevo_rol: str, nuevo_plan: str, dias_sumar: int, nuevo_estado: str):
     return request_cloud({
-        "tipo": "admin_actualizar_suscripcion",
+        "tipo": "admin_actualizar_plan_suscripcion",
         "usuario": usuario,
+        "nuevo_rol": nuevo_rol,
+        "nuevo_plan": nuevo_plan,
         "dias_sumar": dias_sumar,
         "nuevo_estado": nuevo_estado
     })
