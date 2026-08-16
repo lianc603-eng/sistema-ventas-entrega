@@ -1,7 +1,10 @@
 import sqlite3
 import pandas as pd
+import requests
+import json
 
 DB_FILE = "ventas_entregas.db"
+APPSCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjB5mqL0z8U6j-ySz8UO1Hn3KbEl1nifpwtB4zfC8_sfeRx--kcVetQozQ__dVKDIVwg/exec"
 
 def init_db():
     conn = sqlite3.connect(DB_FILE)
@@ -40,7 +43,27 @@ def init_db():
     conn.commit()
     conn.close()
 
-def guardar_registro_venta(cabecera: dict, partidas: list):
+def enviar_a_appscript(cabecera: dict, partidas: list):
+    """Envía la venta y su detalle al endpoint de Apps Script."""
+    payload = {
+        "cabecera": cabecera,
+        "partidas": partidas
+    }
+    try:
+        # allow_redirects=True es obligatorio para los redirects 302 de Google Apps Script
+        response = requests.post(
+            APPSCRIPT_URL, 
+            data=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+            allow_redirects=True,
+            timeout=15
+        )
+        return response.json()
+    except Exception as e:
+        print(f"Error al sincronizar con Apps Script: {e}")
+        return {"status": "error", "message": str(e)}
+
+def guardar_registro_venta(cabecera: dict, partidas: list, sincronizar_cloud: bool = True):
     conn = sqlite3.connect(DB_FILE)
     cur = conn.cursor()
     
@@ -80,6 +103,10 @@ def guardar_registro_venta(cabecera: dict, partidas: list):
     conn.commit()
     conn.close()
 
+    # Envío automático a la Web App
+    if sincronizar_cloud:
+        enviar_a_appscript(cabecera, partidas)
+
 def obtener_ventas():
     conn = sqlite3.connect(DB_FILE)
     df = pd.read_sql_query("SELECT * FROM ventas ORDER BY fecha_registro DESC", conn)
@@ -88,6 +115,10 @@ def obtener_ventas():
 
 def obtener_detalle_folio(folio: str):
     conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT producto, cantidad, precio_unitario, subtotal FROM ventas_detalle WHERE folio_venta = ?", conn, params=(folio,))
+    df = pd.read_sql_query(
+        "SELECT producto, cantidad, precio_unitario, subtotal FROM ventas_detalle WHERE folio_venta = ?", 
+        conn, 
+        params=(folio,)
+    )
     conn.close()
     return df
