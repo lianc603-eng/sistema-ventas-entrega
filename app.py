@@ -1,13 +1,16 @@
 import streamlit as st
 import datetime
 import uuid
+import urllib.parse
 import db
 import pdf_nota
 
 st.set_page_config(page_title="Plataforma Comercial Multi-Giro", layout="wide", page_icon="⚡")
 
+# Configuración comercial
+WHATSAPP_ADMIN = "529817360428"  # Tu número para activación de Plan PRO
 LIMITE_NOTAS_FREE = 10
-LIMITE_PROD_FREE = 5
+LIMITE_EMPRENDIMIENTOS_PRO = 4
 
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
@@ -15,6 +18,8 @@ if "usuario_activo" not in st.session_state:
     st.session_state.usuario_activo = None
 if "partidas_actuales" not in st.session_state:
     st.session_state.partidas_actuales = []
+if "lista_emprendimientos" not in st.session_state:
+    st.session_state.lista_emprendimientos = []
 
 CATALOGO_GIROS = {
     "Pastelería / Repostería / Panadería Artesanal": {
@@ -164,10 +169,10 @@ CATALOGO_GIROS = {
 }
 
 # =========================================================
-# PANTALLA DE ACCESO Y REGISTRO (AUTOSERVICIO)
+# VISTA: PANTALLA DE ACCESO Y REGISTRO
 # =========================================================
 if not st.session_state.autenticado:
-    st.markdown("<h2 style='text-align: center;'>⚡ Acceso a la Plataforma Comercial</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center;'>⚡ Plataforma Comercial & Generador de Comprobantes</h2>", unsafe_allow_html=True)
     st.write("")
     
     col_c1, col_c2, col_c3 = st.columns([1, 1.3, 1])
@@ -178,27 +183,29 @@ if not st.session_state.autenticado:
             usr = st.text_input("Usuario")
             pwd = st.text_input("Contraseña", type="password")
             if st.button("Ingresar", type="primary", use_container_width=True):
-                with st.spinner("Validando credenciales..."):
+                with st.spinner("Validando en la nube..."):
                     res = db.login_usuario(usr, pwd)
                 if res.get("status") == "success":
                     st.session_state.autenticado = True
                     st.session_state.usuario_activo = res["user"]
+                    # Cargar lista de emprendimientos asociados
+                    st.session_state.lista_emprendimientos = db.obtener_emprendimientos(res["user"]["usuario"])
                     st.rerun()
                 else:
-                    st.error(res.get("message", "Usuario o contraseña inválidos."))
+                    st.error(res.get("message", "Usuario o contraseña incorrectos."))
 
         with tab_registro:
-            st.info("🎁 **Comienza gratis con el Plan FREE (hasta 10 comprobantes al mes).**")
+            st.info("🎁 **Comienza gratis con el Plan FREE (hasta 10 notas al mes).**")
             with st.form("form_auto_registro"):
-                r_nom = st.text_input("Nombre del Emprendimiento", placeholder="Ej: Creaciones Dulces")
+                r_nom = st.text_input("Nombre de tu Emprendimiento / Marca", placeholder="Ej: Creaciones Dulces")
                 r_giro = st.selectbox("Giro Comercial", list(CATALOGO_GIROS.keys()))
                 r_tel = st.text_input("WhatsApp / Contacto", placeholder="Ej: 981 123 4567")
-                r_usr = st.text_input("Usuario deseado (sin espacios)")
+                r_usr = st.text_input("Nombre de Usuario deseado (sin espacios)")
                 r_pwd = st.text_input("Contraseña", type="password")
                 
                 if st.form_submit_button("Crear Cuenta FREE", type="primary", use_container_width=True):
                     if r_nom and r_usr and r_pwd:
-                        with st.spinner("Registrando..."):
+                        with st.spinner("Creando cuenta en Google Sheets..."):
                             res_reg = db.registrar_usuario({
                                 "usuario": r_usr.strip(),
                                 "password": r_pwd.strip(),
@@ -207,26 +214,36 @@ if not st.session_state.autenticado:
                                 "telefono": r_tel.strip()
                             })
                         if res_reg.get("status") == "success":
-                            st.success("¡Cuenta creada con éxito! Inicia sesión en la pestaña izquierda.")
+                            st.success("¡Cuenta creada exitosamente! Inicia sesión en la pestaña izquierda.")
                         else:
-                            st.error(res_reg.get("message", "Error al crear usuario."))
+                            st.error(res_reg.get("message", "Error al crear cuenta."))
                     else:
-                        st.error("Por favor completa los campos obligatorios.")
+                        st.error("Por favor completa los campos requeridos.")
     st.stop()
 
 # =========================================================
-# HEADER DE USUARIO
+# GESTIÓN DE SESIÓN ACTIVA
 # =========================================================
 u = st.session_state.usuario_activo
 es_admin = (u.get("rol") == "ADMIN")
 plan = u.get("plan", "FREE")
 
+# Multi-emprendimiento para PRO / SuperAdmin
+emprendimientos_usuario = st.session_state.lista_emprendimientos
+if not emprendimientos_usuario:
+    emprendimientos_usuario = [{
+        "nombre_comercial": u.get("nombre_comercial", ""),
+        "giro": u.get("giro", list(CATALOGO_GIROS.keys())[0]),
+        "telefono": u.get("telefono", "")
+    }]
+
+# Barra superior
 c_top1, c_top2 = st.columns([3, 1])
 with c_top1:
     if es_admin:
         st.info(f"👑 **Super Administrador:** `{u['usuario']}` | **Acceso Ilimitado Total** | Gestión de Licencias Activa")
     else:
-        badge_plan = "🔥 Plan PRO (Ilimitado)" if plan == "PRO" else "🌱 Plan FREE (Gratuito)"
+        badge_plan = "🔥 Plan PRO (Hasta 4 Emprendimientos)" if plan == "PRO" else "🌱 Plan FREE (Gratuito)"
         color_st = "green" if u.get("estado") == "ACTIVA" else "red"
         st.markdown(f"🏢 **{u['nombre_comercial']}** | {badge_plan} | Estado: :{color_st}[**{u.get('estado', 'ACTIVA')}**] | Vence: `{u.get('fecha_vencimiento')}`")
 
@@ -234,32 +251,80 @@ with c_top2:
     if st.button("🚪 Cerrar Sesión", use_container_width=True):
         st.session_state.autenticado = False
         st.session_state.usuario_activo = None
+        st.session_state.lista_emprendimientos = []
         st.rerun()
 
 # =========================================================
-# BLOQUEO SI CUENTA ESTÁ SUSPENDIDA (EXCEPTO ADMIN)
+# BANNER DE CONTACTO / UPGRADE A PLAN PRO PARA CUENTAS FREE
 # =========================================================
+if plan == "FREE" and not es_admin:
+    mensaje_wsp = f"¡Hola! Soy {u.get('usuario')} ({u.get('nombre_comercial')}). Me interesa activar el Plan PRO para registrar mis 4 emprendimientos y tener comprobantes ilimitados."
+    link_wsp = f"https://wa.me/{WHATSAPP_ADMIN}?text={urllib.parse.quote(mensaje_wsp)}"
+    
+    st.markdown(f"""
+    <div style="background-color: #FEF3C7; border: 1px solid #F59E0B; border-radius: 8px; padding: 12px 18px; margin-bottom: 15px;">
+        <span style="font-size: 15px; font-weight: 600; color: #92400E;">⭐ ¿Quieres comprobantes ilimitados, subir tu logo y gestionar hasta 4 emprendimientos?</span><br>
+        <span style="font-size: 13px; color: #B45309;">Actualiza hoy mismo a la versión PRO mensual.</span>
+        <div style="margin-top: 8px;">
+            <a href="{link_wsp}" target="_blank" style="background-color: #25D366; color: white; padding: 6px 14px; text-decoration: none; border-radius: 5px; font-weight: bold; font-size: 13px; display: inline-block;">
+                💬 Contactar al Administrador por WhatsApp para Activar PRO
+            </a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+# Suspensión de cuenta vencida
 if not es_admin and u.get("estado") == "SUSPENDIDA":
     st.error("⚠️ **Tu suscripción mensual ha expirado.**")
-    st.warning("Para renovar tu cuenta y continuar emitiendo comprobantes, comunícate con el administrador para reactivar tu Plan PRO.")
+    st.warning("Comunícate con el administrador para renovar tu acceso a la plataforma.")
     st.stop()
 
 # =========================================================
-# MENÚ LATERAL: DISEÑO Y OPCIONES DE MARCA
+# MENÚ LATERAL: DISEÑO Y SELECTOR DE EMPRENDIMIENTO
 # =========================================================
 with st.sidebar:
+    st.header("🏢 Emprendimiento Activo")
+    
+    # Selector de marca si tiene Plan PRO o SuperAdmin
+    if (plan == "PRO" or es_admin) and len(emprendimientos_usuario) > 1:
+        nombres_emp = [e["nombre_comercial"] for e in emprendimientos_usuario]
+        emp_sel_nombre = st.selectbox("Selecciona la marca a emitir:", nombres_emp)
+        emp_activo = next((item for item in emprendimientos_usuario if item["nombre_comercial"] == emp_sel_nombre), emprendimientos_usuario[0])
+    else:
+        emp_activo = emprendimientos_usuario[0]
+
+    # Modalidad para agregar un nuevo emprendimiento (Hasta 4 en PRO)
+    if (plan == "PRO" or es_admin) and len(emprendimientos_usuario) < LIMITE_EMPRENDIMIENTOS_PRO:
+        with st.expander("➕ Dar de alta otro emprendimiento", expanded=False):
+            with st.form("form_add_emp"):
+                add_nom = st.text_input("Nombre de la nueva marca")
+                add_giro = st.selectbox("Giro de la nueva marca", list(CATALOGO_GIROS.keys()))
+                add_tel = st.text_input("WhatsApp / Contacto de la marca")
+                if st.form_submit_button("Guardar Marca"):
+                    if add_nom.strip():
+                        db.guardar_emprendimiento(u["usuario"], {
+                            "nombre_comercial": add_nom.strip(),
+                            "giro": add_giro,
+                            "telefono": add_tel.strip()
+                        })
+                        st.session_state.lista_emprendimientos = db.obtener_emprendimientos(u["usuario"])
+                        st.success(f"¡Marca '{add_nom}' registrada!")
+                        st.rerun()
+
+    preset = CATALOGO_GIROS.get(emp_activo.get("giro"), list(CATALOGO_GIROS.values())[0])
+
+    st.markdown("---")
     st.header("🎨 Diseño de Comprobante")
-    preset = CATALOGO_GIROS.get(u.get("giro"), list(CATALOGO_GIROS.values())[0])
 
     with st.expander("🏢 Identidad de Marca", expanded=True):
-        negocio_nombre = st.text_input("Nombre de la Marca", value=u.get("nombre_comercial", ""))
-        negocio_contacto = st.text_input("WhatsApp / Contacto", value=u.get("telefono", ""))
+        negocio_nombre = st.text_input("Nombre de la Marca", value=emp_activo.get("nombre_comercial", ""))
+        negocio_contacto = st.text_input("WhatsApp / Contacto", value=emp_activo.get("telefono", ""))
         
         if plan == "PRO" or es_admin:
             logo_file = st.file_uploader("Subir Logotipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
             logo_bytes = logo_file.getvalue() if logo_file else None
         else:
-            st.caption("🔒 *Subir logotipo personalizado exclusivo para Plan PRO.*")
+            st.caption("🔒 *Logotipo exclusivo para Plan PRO.*")
             logo_bytes = None
 
     with st.expander("📝 Textos del Documento", expanded=False):
@@ -282,7 +347,7 @@ with st.sidebar:
             desglosar_iva = st.toggle("Activar Desglose de IVA / Impuesto", value=False)
             tasa_iva = st.number_input("Tasa IVA (%)", min_value=0.0, value=16.0) if desglosar_iva else 0.0
         else:
-            st.caption("🔒 *Desglose automático de IVA disponible en Plan PRO.*")
+            st.caption("🔒 *Desglose de IVA disponible en Plan PRO.*")
             desglosar_iva = False
             tasa_iva = 0.0
 
@@ -314,7 +379,7 @@ config_pdf_usuario = {
 }
 
 # =========================================================
-# PESTAÑAS PRINCIPALES (INCLUYE ADMIN SI CORRESPONDE)
+# PESTAÑAS PRINCIPALES
 # =========================================================
 titulos_tabs = ["📝 Nueva Venta & Preview", "🏷️ Catálogo", "📊 Historial en Google Sheets"]
 if es_admin:
@@ -324,19 +389,18 @@ tabs = st.tabs(titulos_tabs)
 
 # --- PESTAÑA 1: NUEVA VENTA ---
 with tabs[0]:
-    # Validación de límite para usuarios FREE
     df_propias = db.obtener_ventas(u["usuario"], es_admin=False)
     cant_emitidas = len(df_propias)
     
     if plan == "FREE" and not es_admin and cant_emitidas >= LIMITE_NOTAS_FREE:
         st.warning(f"⚠️ Has alcanzado el límite de **{LIMITE_NOTAS_FREE} comprobantes** del Plan FREE.")
-        st.info("🚀 Contacta al administrador para actualizar a **Plan PRO** y emitir comprobantes ilimitados.")
+        st.info("🚀 Contacta al administrador mediante el botón de WhatsApp arriba para activar tu **Plan PRO**.")
     else:
         col_izq, col_der = st.columns([1.1, 0.9])
         with col_izq:
-            st.subheader("1. Datos Generales")
+            st.subheader(f"1. Datos de Venta ({negocio_nombre})")
             if plan == "FREE" and not es_admin:
-                st.caption(f"Comprobantes usados: **{cant_emitidas}/{LIMITE_NOTAS_FREE}** (Plan FREE)")
+                st.caption(f"Comprobantes emitidos este mes: **{cant_emitidas}/{LIMITE_NOTAS_FREE}** (Plan FREE)")
 
             f1, f2 = st.columns(2)
             with f1:
@@ -449,7 +513,7 @@ with tabs[0]:
                 page = pdf_doc.get_page(0)
                 bitmap = page.render(scale=2.0)
                 pil_image = bitmap.to_pil()
-                st.image(pil_image, caption="Comprobante en tiempo real", use_container_width=True)
+                st.image(pil_image, caption=f"Emprendimiento: {negocio_nombre}", use_container_width=True)
             except Exception:
                 st.info("💡 Cambia los parámetros del menú lateral y descarga el PDF.")
 
@@ -464,9 +528,9 @@ with tabs[0]:
 
 # --- PESTAÑA 2: CATÁLOGO ---
 with tabs[1]:
-    st.subheader("Catálogo de Productos y Servicios")
+    st.subheader(f"Catálogo de Precios ({negocio_nombre})")
     with st.form("form_cat"):
-        p_nom = st.text_input("Nombre del Concepto")
+        p_nom = st.text_input("Nombre del Concepto / Producto")
         c1, c2, c3 = st.columns(3)
         with c1:
             p_costo = st.number_input("Costo Base ($)", min_value=0.0, step=10.0)
@@ -475,9 +539,9 @@ with tabs[1]:
         with c3:
             p_precio = st.number_input("Precio al Público ($)", value=float(p_costo * (1 + p_margen/100)))
         
-        if st.form_submit_button("Guardar en Google Sheets"):
+        if st.form_submit_button("Guardar en Catálogo"):
             if p_nom.strip():
-                with st.spinner("Guardando en catálogo..."):
+                with st.spinner("Guardando..."):
                     db.guardar_producto(u["usuario"], {
                         "nombre": p_nom.strip(),
                         "costo_base": p_costo,
@@ -490,7 +554,7 @@ with tabs[1]:
 
 # --- PESTAÑA 3: HISTORIAL ---
 with tabs[2]:
-    st.subheader("Mis Ventas en Google Sheets")
+    st.subheader("Historial de Comprobantes Registrados")
     df_mis_ventas = db.obtener_ventas(u["usuario"], es_admin=False)
     if df_mis_ventas.empty:
         st.info("No tienes ventas registradas aún.")
@@ -535,4 +599,5 @@ if es_admin:
                     db.admin_actualizar_plan_suscripcion(u_elegido, nuevo_rol, nuevo_plan, dias_extender, nuevo_estado)
                 st.success(f"Usuario '{u_elegido}' actualizado exitosamente.")
                 st.rerun()
-                
+        else:
+            st.info("No hay usuarios registrados aún en Google Sheets.")
