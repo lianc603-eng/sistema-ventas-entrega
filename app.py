@@ -16,7 +16,21 @@ if "ultima_venta" not in st.session_state:
 # CATÁLOGO GENERAL DE PRESETS POR GIRO COMERCIAL
 # =========================================================
 CATALOGO_GIROS = {
-    # Giros específicos solicitados
+    # Repostería, Panadería y Postres
+    "Pastelería / Repostería / Panadería Artesanal": {
+        "titulo": "NOTA DE PEDIDO Y REMISIÓN DE REPOSTERÍA",
+        "subtitulo": "Pasteles de Diseño, Postres y Repostería Fina",
+        "etiqueta_fecha": "FECHA DE ENTREGA DEL PEDIDO:",
+        "etiqueta_lugar": "Lugar de Entrega / Mostrador:",
+        "etiqueta_detalle": "Pastel / Postre / Porciones / Sabor y Temática",
+        "firma_izq": "Elaborado por (Chef Pastelero/a)",
+        "firma_der": "Recibido de Conformidad (Cliente)",
+        "color_primario": "#DB2777",  # Rosa Pastel / Repostería
+        "color_tabla": "#831843",
+        "placeholder_prod": "Ej: Pastel 3 Leches 30 Personas relleno de Fresa con Temática"
+    },
+
+    # Aguas Naturales y Bebidas
     "Aguas Naturales / Paletería / Bebidas Artesanales": {
         "titulo": "NOTA DE VENTA Y DESPACHO DE BEBIDAS",
         "subtitulo": "Preparación de Aguas Naturales y Sabores Artesanales",
@@ -25,10 +39,12 @@ CATALOGO_GIROS = {
         "etiqueta_detalle": "Sabor / Vitrolero / Litros / Presentación",
         "firma_izq": "Despachado por (Encargado/a)",
         "firma_der": "Recibido de Conformidad (Cliente)",
-        "color_primario": "#059669", # Verde Esmeralda Fresco
+        "color_primario": "#059669",  # Verde Esmeralda Fresco
         "color_tabla": "#064E3B",
         "placeholder_prod": "Ej: Vitrolero 20L Horchata de Coco / Garrafa Jamaica"
     },
+
+    # Prensa, Medios y Reportería
     "Prensa / Reportería / Cobertura Periodística": {
         "titulo": "ORDEN DE COBERTURA Y COMISIONES DE PRENSA",
         "subtitulo": "Servicios Periodísticos, Fotografía y Redacción Informativa",
@@ -37,10 +53,12 @@ CATALOGO_GIROS = {
         "etiqueta_detalle": "Servicio Periodístico / Nota / Entrevista / Reportaje",
         "firma_izq": "Reportero(a) / Periodista Asignado",
         "firma_der": "Aprobación de Cobertura y Medio",
-        "color_primario": "#DC2626", # Rojo Editorial Prensa
+        "color_primario": "#DC2626",  # Rojo Editorial Prensa
         "color_tabla": "#18181B",
         "placeholder_prod": "Ej: Cobertura Conferencia de Prensa + Nota Informativa + Galería"
     },
+
+    # Marketing, Producción y Creativos
     "Agencia de Marketing / Producción Audiovisual": {
         "titulo": "COTIZACIÓN Y ORDEN DE SERVICIO CREATIVO",
         "subtitulo": "Marketing Digital, Campañas y Producción Audiovisual",
@@ -53,6 +71,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#0F172A",
         "placeholder_prod": "Ej: Gestión de Redes Sociales mensual + 8 Reels"
     },
+
+    # Mobiliario y Eventos
     "Renta de Mobiliario y Banquetes para Eventos": {
         "titulo": "CONTRATO Y REMISIÓN DE MOBILIARIO",
         "subtitulo": "Renta de Equipo, Mesas, Sillas y Toldos",
@@ -65,6 +85,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#2E1065",
         "placeholder_prod": "Ej: 5 Mesas Tablón con Mantel + 50 Sillas Plegables"
     },
+
+    # Talleres y Refacciones
     "Taller Mecánico / Refaccionaria / Llantera": {
         "titulo": "ORDEN DE SERVICIO Y DIAGNÓSTICO AUTOMOTRIZ",
         "subtitulo": "Mantenimiento Preventivo, Correctivo y Refacciones",
@@ -77,6 +99,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#451A03",
         "placeholder_prod": "Ej: Afinación Mayor + Cambio de Aceite Sintético 5W30"
     },
+
+    # Alimentos y Restaurantes
     "Restaurante / Cafetería / Cocina Económica": {
         "titulo": "COMANDA Y CUENTA DE CONSUMO",
         "subtitulo": "Servicio de Alimentos, Bebidas y Banquetes",
@@ -89,6 +113,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#431407",
         "placeholder_prod": "Ej: 3 Menús Ejecutivos del Día + Jarras de Agua"
     },
+
+    # Artes Gráficas
     "Imprenta / Serigrafía / Rotulación": {
         "titulo": "ORDEN DE PRODUCCIÓN GRÁFICA Y REPARTO",
         "subtitulo": "Impresión Offset, Digital y Gran Formato",
@@ -101,6 +127,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#082F49",
         "placeholder_prod": "Ej: 1,000 Volantes 1/4 carta couche 130g Full Color"
     },
+
+    # Ferreterías y Materiales
     "Ferretería / Tlapalería / Materiales": {
         "titulo": "NOTA DE VENTA Y REMISIÓN DE MATERIALES",
         "subtitulo": "Ferretería, Pinturas, Plomería y Electricidad",
@@ -113,6 +141,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#0F172A",
         "placeholder_prod": "Ej: 10 Bultos de Cemento Gris + 5 Varillas 3/8"
     },
+
+    # Comercio General
     "Tienda de Abarrotes / Minisúper / Miscelánea": {
         "titulo": "TICKET Y NOTA DE COMPRA",
         "subtitulo": "Venta de Abarrotes y Productos de Consumo",
@@ -125,6 +155,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#14532D",
         "placeholder_prod": "Ej: Caja de Huevo 12kg + Aceite vegetal 1L"
     },
+
+    # Escuelas y Cursos
     "Escuela / Kínder / Guardería / Academia": {
         "titulo": "RECIBO DE PAGO DE COLEGIATURA Y TALLERES",
         "subtitulo": "Servicios Educativos y Estancia Infantil",
@@ -137,6 +169,8 @@ CATALOGO_GIROS = {
         "color_tabla": "#1E3A8A",
         "placeholder_prod": "Ej: Colegiatura del Mes de Agosto - Nivel Preescolar"
     },
+
+    # Consultoría y Honorarios
     "Consultoría / Honorarios / Despacho": {
         "titulo": "RECIBO DE HONORARIOS Y ASESORÍA PROFESIONAL",
         "subtitulo": "Servicios Profesionales de Asesoría y Consultoría",
@@ -157,19 +191,18 @@ CATALOGO_GIROS = {
 with st.sidebar:
     st.header("⚡ Configuración del Negocio")
     
-    # Selector con búsqueda predictiva
     lista_giros = list(CATALOGO_GIROS.keys())
     giro_seleccionado = st.selectbox(
         "🔍 Escribe o selecciona el Giro Comercial:",
         options=lista_giros,
         index=0,
-        help="Escribe letras para que Streamlit filtre y autocomplete el giro comercial."
+        help="Escribe letras para buscar y filtrar automáticamente el giro comercial."
     )
     preset = CATALOGO_GIROS[giro_seleccionado]
 
     with st.expander("🏢 Datos de la Empresa / Marca", expanded=True):
-        negocio_nombre = st.text_input("Nombre de la Marca", placeholder="Ej: Aguas La Famosa / Agencia X")
-        negocio_contacto = st.text_input("Contacto / WhatsApp", placeholder="Ej: 981 123 4567")
+        negocio_nombre = st.text_input("Nombre de la Marca", placeholder="Ej: Mi Empresa Comercial")
+        negocio_contacto = st.text_input("Contacto / WhatsApp", placeholder="Ej: WhatsApp: 981 123 4567")
         logo_file = st.file_uploader("Subir Logotipo (PNG/JPG)", type=["png", "jpg", "jpeg"])
         logo_bytes = logo_file.getvalue() if logo_file else None
 
@@ -189,8 +222,6 @@ with st.sidebar:
 
     with st.expander("💲 Moneda e Impuestos (IVA)", expanded=True):
         simbolo_moneda = st.selectbox("Símbolo de Moneda", ["$", "MXN $", "USD $", "EUR €"], index=0)
-        
-        # Toggle para Activar / Desactivar IVA
         desglosar_iva = st.toggle("Activar Desglose de IVA / Impuesto", value=False)
         if desglosar_iva:
             tasa_iva = st.number_input("Tasa de IVA (%)", min_value=0.0, max_value=100.0, value=16.0, step=1.0)
@@ -375,7 +406,7 @@ with pestana_registro:
 with pestana_catalogo:
     st.subheader("Catálogo de Precios y Servicios")
     with st.form("form_catalogo"):
-        nombre_prod = st.text_input("Nombre del Producto o Servicio", placeholder="Ej: Garrafa Horchata 20L / Cobertura Rueda de Prensa")
+        nombre_prod = st.text_input("Nombre del Producto o Servicio", placeholder="Ej: Garrafa Horchata 20L / Pastel 3 Leches / Cobertura Prensa")
         c1, c2, c3 = st.columns(3)
         with c1:
             costo = st.number_input("Costo Base ($)", min_value=0.0, step=10.0)
