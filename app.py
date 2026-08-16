@@ -4,12 +4,12 @@ import uuid
 import db
 import pdf_nota
 
-st.set_page_config(page_title="Sistema de Ventas y Entregas", layout="wide", page_icon="📦")
+st.set_page_config(page_title="Sistema de Gestión de Ventas y Entregas", layout="wide", page_icon="📦")
 
 # 1. Inicializar base de datos local SQLite
 db.init_db()
 
-# 2. Inicializar variables de estado en la sesión
+# 2. Inicializar variables de estado de sesión
 if "partidas_actuales" not in st.session_state:
     st.session_state.partidas_actuales = []
 if "ultima_venta" not in st.session_state:
@@ -24,7 +24,7 @@ pestana_venta, pestana_catalogo, pestana_historial = st.tabs([
 ])
 
 # =========================================================
-# PESTAÑA 1: REGISTRO DE NUEVA VENTA Y GENERACIÓN DE NOTA
+# PESTAÑA 1: NUEVA VENTA
 # =========================================================
 with pestana_venta:
     st.subheader("Datos de la Venta y Entrega")
@@ -39,13 +39,27 @@ with pestana_venta:
 
     with col2:
         fecha_entrega = st.date_input("Fecha de Entrega", min_value=datetime.date.today())
-        horario_entrega = st.selectbox("Horario Acordado", [
-            "Horario abierto",
-            "09:00 - 12:00", 
-            "12:00 - 15:00", 
-            "15:00 - 18:00", 
-            "18:00 - 21:00"
+        
+        # Modalidad de selección de horario
+        tipo_horario = st.selectbox("Modalidad de Horario", [
+            "Hora específica", 
+            "Rango predefinido", 
+            "Horario abierto"
         ])
+        
+        if tipo_horario == "Hora específica":
+            hora_sel = st.time_input("Selecciona la hora de entrega", value=datetime.time(12, 0))
+            horario_entrega = hora_sel.strftime("%I:%M %p").lstrip("0")
+        elif tipo_horario == "Rango predefinido":
+            horario_entrega = st.selectbox("Rango acordado", [
+                "09:00 - 12:00", 
+                "12:00 - 15:00", 
+                "15:00 - 18:00", 
+                "18:00 - 21:00"
+            ])
+        else:
+            horario_entrega = "Horario abierto"
+
         anticipo = st.number_input("Anticipo Pagado ($)", min_value=0.0, step=50.0)
         estado_entrega = st.selectbox("Estado de Entrega", ["Pendiente", "En Ruta", "Entregado", "Cancelado"])
 
@@ -72,9 +86,9 @@ with pestana_venta:
                 })
                 st.rerun()
             else:
-                st.warning("Ingresa la descripción del producto.")
+                st.warning("Ingresa el nombre o descripción del producto.")
 
-    # Mostrar tabla y calcular balances si hay partidas agregadas
+    # Mostrar desglose y totales si hay partidas agregadas
     if st.session_state.partidas_actuales:
         st.table(st.session_state.partidas_actuales)
         
@@ -123,11 +137,11 @@ with pestana_venta:
                 st.session_state.partidas_actuales = []
                 st.rerun()
 
-    # Descarga directa del PDF de la última venta registrada
+    # Botón de descarga de comprobante PDF de la última venta
     if st.session_state.ultima_venta:
         st.markdown("---")
         folio_reciente = st.session_state.ultima_venta["cabecera"]["folio"]
-        st.success(f"Nota lista para el folio: **{folio_reciente}**")
+        st.success(f"Comprobante listo para el folio: **{folio_reciente}**")
         
         pdf_bytes = pdf_nota.generar_nota_pdf(
             st.session_state.ultima_venta["cabecera"], 
@@ -168,7 +182,7 @@ with pestana_catalogo:
                 st.error("El nombre del producto no puede quedar vacío.")
 
 # =========================================================
-# PESTAÑA 3: HISTORIAL DE VENTAS Y REIMPRESIÓN DE PDF
+# PESTAÑA 3: HISTORIAL DE VENTAS Y REIMPRESIÓN
 # =========================================================
 with pestana_historial:
     st.subheader("Historial de Ventas")
@@ -189,7 +203,6 @@ with pestana_historial:
             st.write(f"**Partidas del folio:** `{folio_elegido}`")
             st.table(df_partidas)
             
-            # Recuperar datos de cabecera seleccionada para reconstruir el PDF
             fila_cabecera = df_ventas[df_ventas["folio"] == folio_elegido].iloc[0].to_dict()
             partidas_list = df_partidas.to_dict(orient="records")
             
