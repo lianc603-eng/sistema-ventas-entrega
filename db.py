@@ -40,17 +40,32 @@ def init_db():
             FOREIGN KEY (folio_venta) REFERENCES ventas (folio)
         )
     """)
+    
+    # Tabla opcional de catálogo de productos
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS productos (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            nombre TEXT UNIQUE,
+            costo_base REAL,
+            margen_porcentaje REAL,
+            precio_venta REAL
+        )
+    """)
     conn.commit()
     conn.close()
 
+# -------------------------------------------------------------
+# FUNCIONES DE SINCRONIZACIÓN CON GOOGLE APPS SCRIPT
+# -------------------------------------------------------------
+
 def enviar_a_appscript(cabecera: dict, partidas: list):
-    """Envía la venta y su detalle al endpoint de Apps Script."""
+    """Envía la venta a Apps Script (tipo: nueva_venta)."""
     payload = {
+        "tipo": "nueva_venta",
         "cabecera": cabecera,
         "partidas": partidas
     }
     try:
-        # allow_redirects=True es obligatorio para los redirects 302 de Google Apps Script
         response = requests.post(
             APPSCRIPT_URL, 
             data=json.dumps(payload),
@@ -60,8 +75,31 @@ def enviar_a_appscript(cabecera: dict, partidas: list):
         )
         return response.json()
     except Exception as e:
-        print(f"Error al sincronizar con Apps Script: {e}")
+        print(f"Error al sincronizar venta con Apps Script: {e}")
         return {"status": "error", "message": str(e)}
+
+def enviar_producto_a_appscript(producto: dict):
+    """Envía un nuevo producto al catálogo en Sheets (tipo: nuevo_producto)."""
+    payload = {
+        "tipo": "nuevo_producto",
+        "producto": producto
+    }
+    try:
+        response = requests.post(
+            APPSCRIPT_URL, 
+            data=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+            allow_redirects=True,
+            timeout=15
+        )
+        return response.json()
+    except Exception as e:
+        print(f"Error al sincronizar producto con Apps Script: {e}")
+        return {"status": "error", "message": str(e)}
+
+# -------------------------------------------------------------
+# OPERACIONES DE BASE DE DATOS LOCAL (SQLITE)
+# -------------------------------------------------------------
 
 def guardar_registro_venta(cabecera: dict, partidas: list, sincronizar_cloud: bool = True):
     conn = sqlite3.connect(DB_FILE)
@@ -103,9 +141,29 @@ def guardar_registro_venta(cabecera: dict, partidas: list, sincronizar_cloud: bo
     conn.commit()
     conn.close()
 
-    # Envío automático a la Web App
     if sincronizar_cloud:
-        enviar_a_appscript(cabecera, partidas)
+        res = enviar_a_appscript(cabecera, partidas)
+        print(f"Respuesta Apps Script: {res}")
+
+def guardar_producto(nombre: str, costo_base: float, margen_porcentaje: float, precio_venta: float, sincronizar_cloud: bool = True):
+    conn = sqlite3.connect(DB_FILE)
+    cur = conn.cursor()
+    cur.execute("""
+        INSERT OR REPLACE INTO productos (nombre, costo_base, margen_porcentaje, precio_venta)
+        VALUES (?, ?, ?, ?)
+    """, (nombre, costo_base, margen_porcentaje, precio_venta))
+    conn.commit()
+    conn.close()
+
+    if sincronizar_cloud:
+        prod_data = {
+            "nombre": nombre,
+            "costo_base": costo_base,
+            "margen_porcentaje": margen_porcentaje,
+            "precio_venta": precio_venta
+        }
+        res = enviar_producto_a_appscript(prod_data)
+        print(f"Respuesta Apps Script (Producto): {res}")
 
 def obtener_ventas():
     conn = sqlite3.connect(DB_FILE)
