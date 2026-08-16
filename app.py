@@ -19,8 +19,8 @@ with st.sidebar:
     st.header("🎨 Diseño del Comprobante")
     
     with st.expander("🏢 Identidad de Marca", expanded=True):
-        negocio_nombre = st.text_input("Nombre de Empresa", value="Mi Negocio Comercial")
-        negocio_contacto = st.text_input("Contacto", value="WhatsApp: 55-1234-5678")
+        negocio_nombre = st.text_input("Nombre de Empresa", placeholder="Ej: Mi Negocio Comercial")
+        negocio_contacto = st.text_input("Contacto", placeholder="Ej: WhatsApp: 55-1234-5678")
         logo_file = st.file_uploader("Subir Logo (PNG/JPG)", type=["png", "jpg", "jpeg"])
         logo_bytes = logo_file.getvalue() if logo_file else None
 
@@ -40,7 +40,7 @@ with st.sidebar:
         firma_izq = st.text_input("Firma izquierda", value="Entregado por (Vendedor/Repartidor)")
         firma_der = st.text_input("Firma derecha", value="Firma de Recibido de Conformidad (Cliente)")
 
-# Configuración unificada para pasar a pdf_nota
+# Configuración unificada
 config_pdf_usuario = {
     "titulo_documento": titulo_doc,
     "subtitulo_documento": subtitulo_doc,
@@ -78,9 +78,9 @@ with pestana_venta:
         with f1:
             folio_auto = f"V-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
             folio = st.text_input("Folio", value=folio_auto)
-            cliente = st.text_input("Nombre del Cliente", value="Consumidor Final")
-            telefono = st.text_input("Teléfono", value="5500000000")
-            direccion = st.text_area("Lugar de Entrega", value="Mostrador")
+            cliente = st.text_input("Nombre del Cliente", placeholder="Ej: Juan Pérez")
+            telefono = st.text_input("Teléfono", placeholder="Ej: 55 1234 5678")
+            direccion = st.text_area("Lugar de Entrega", placeholder="Ej: Calle Morelos #123 o Mostrador")
 
         with f2:
             fecha_entrega = st.date_input("Fecha de Entrega", min_value=datetime.date.today())
@@ -100,7 +100,7 @@ with pestana_venta:
         st.subheader("2. Partidas / Artículos")
         cp1, cp2, cp3, cp4 = st.columns([3, 1, 1, 1])
         with cp1:
-            prod_nom = st.text_input("Descripción")
+            prod_nom = st.text_input("Descripción", placeholder="Ej: Mesa redonda")
         with cp2:
             prod_cant = st.number_input("Cant.", min_value=1, value=1, step=1)
         with cp3:
@@ -119,7 +119,7 @@ with pestana_venta:
                     st.rerun()
 
         partidas_render = st.session_state.partidas_actuales if st.session_state.partidas_actuales else [
-            {"producto": "Producto de Ejemplo", "cantidad": 1, "precio_unitario": 250.0, "subtotal": 250.0}
+            {"producto": "Producto de Muestra", "cantidad": 1, "precio_unitario": 0.0, "subtotal": 0.0}
         ]
 
         total_venta = sum(item["subtotal"] for item in partidas_render)
@@ -131,29 +131,32 @@ with pestana_venta:
             btn_guardar, btn_limpiar = st.columns([2, 1])
             with btn_guardar:
                 if st.button("💾 Guardar y Sincronizar Venta", type="primary", use_container_width=True):
-                    cabecera_data = {
-                        "folio": folio,
-                        "fecha_registro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                        "cliente": cliente,
-                        "telefono": telefono,
-                        "direccion": direccion,
-                        "fecha_entrega": str(fecha_entrega),
-                        "horario_entrega": horario_entrega,
-                        "total": total_venta,
-                        "anticipo": anticipo,
-                        "saldo": saldo_pendiente,
-                        "estado_pago": estado_pago,
-                        "estado_entrega": estado_entrega
-                    }
-                    with st.spinner("Guardando en base local y Google Sheets..."):
-                        db.guardar_registro_venta(cabecera_data, st.session_state.partidas_actuales, sincronizar_cloud=True)
-                    st.session_state.ultima_venta = {
-                        "cabecera": cabecera_data,
-                        "partidas": list(st.session_state.partidas_actuales)
-                    }
-                    st.session_state.partidas_actuales = []
-                    st.success(f"¡Venta {folio} guardada exitosamente!")
-                    st.rerun()
+                    if not cliente.strip():
+                        st.error("Por favor, ingresa el nombre del cliente.")
+                    else:
+                        cabecera_data = {
+                            "folio": folio,
+                            "fecha_registro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                            "cliente": cliente,
+                            "telefono": telefono if telefono.strip() else "S/N",
+                            "direccion": direccion if direccion.strip() else "Mostrador",
+                            "fecha_entrega": str(fecha_entrega),
+                            "horario_entrega": horario_entrega,
+                            "total": total_venta,
+                            "anticipo": anticipo,
+                            "saldo": saldo_pendiente,
+                            "estado_pago": estado_pago,
+                            "estado_entrega": estado_entrega
+                        }
+                        with st.spinner("Guardando en base local y Google Sheets..."):
+                            db.guardar_registro_venta(cabecera_data, st.session_state.partidas_actuales, sincronizar_cloud=True)
+                        st.session_state.ultima_venta = {
+                            "cabecera": cabecera_data,
+                            "partidas": list(st.session_state.partidas_actuales)
+                        }
+                        st.session_state.partidas_actuales = []
+                        st.success(f"¡Venta {folio} guardada exitosamente!")
+                        st.rerun()
 
             with btn_limpiar:
                 if st.button("🗑️ Limpiar Partidas", use_container_width=True):
@@ -166,9 +169,9 @@ with pestana_venta:
         
         cabecera_preview = {
             "folio": folio,
-            "cliente": cliente if cliente.strip() else "Consumidor Final",
-            "telefono": telefono,
-            "direccion": direccion,
+            "cliente": cliente if cliente.strip() else "Nombre del Cliente",
+            "telefono": telefono if telefono.strip() else "000 000 0000",
+            "direccion": direccion if direccion.strip() else "Lugar de Entrega / Mostrador",
             "fecha_entrega": str(fecha_entrega),
             "horario_entrega": horario_entrega,
             "total": total_venta,
@@ -182,7 +185,6 @@ with pestana_venta:
             config_personalizada=config_pdf_usuario
         )
         
-        # Renderizado de la página en imagen para evitar bloqueos del navegador
         try:
             import pypdfium2 as pdfium
             pdf_doc = pdfium.PdfDocument(pdf_bytes_live)
@@ -206,7 +208,7 @@ with pestana_venta:
 with pestana_catalogo:
     st.subheader("Alta de Producto al Catálogo")
     with st.form("form_catalogo"):
-        nombre_prod = st.text_input("Nombre / Descripción del Producto")
+        nombre_prod = st.text_input("Nombre / Descripción del Producto", placeholder="Ej: Silla Plegable")
         c1, c2, c3 = st.columns(3)
         with c1:
             costo = st.number_input("Costo Base ($)", min_value=0.0, step=10.0)
