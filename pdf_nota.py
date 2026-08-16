@@ -2,7 +2,7 @@ from fpdf import FPDF
 import io
 
 def hex_to_rgb(hex_str: str):
-    """Convierte un color hexadecimal (#RRGGBB) a una tupla (R, G, B)."""
+    """Convierte color hexadecimal (#RRGGBB) a tupla (R, G, B)."""
     hex_str = hex_str.lstrip("#")
     return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
 
@@ -12,12 +12,17 @@ class NotaEntregaPDF(FPDF):
         self.config = config
 
     def header(self):
+        # Color de fondo de toda la hoja
+        r_bg, g_bg, b_bg = hex_to_rgb(self.config.get("color_fondo_hoja", "#FFFFFF"))
+        self.set_fill_color(r_bg, g_bg, b_bg)
+        self.rect(0, 0, 216, 279, 'F')
+
         # Franja decorativa superior
         r_p, g_p, b_p = hex_to_rgb(self.config.get("color_primario", "#10B981"))
         self.set_fill_color(r_p, g_p, b_p)
         self.rect(0, 0, 216, 6, 'F')
         
-        # Logo opcional (bytes)
+        # Logo opcional
         logo_bytes = self.config.get("logo_bytes")
         start_x = 14
         if logo_bytes:
@@ -38,7 +43,6 @@ class NotaEntregaPDF(FPDF):
         subtitulo_doc = self.config.get("subtitulo_documento", "Comprobante de Entrega y Despacho")
         self.cell(88 if not logo_bytes else (202 - start_x - 100), 6, subtitulo_doc, ln=True, align='R')
         
-        # Subtítulo con nombre del negocio si está definido
         negocio = self.config.get("nombre_negocio", "")
         contacto = self.config.get("contacto_negocio", "")
         if negocio or contacto:
@@ -60,7 +64,6 @@ class NotaEntregaPDF(FPDF):
         self.cell(0, 4, f'Página {self.page_no()}/{{nb}}', align='C')
 
 def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict = None) -> bytes:
-    # Configuración por defecto si no se pasa ninguna
     config = {
         "titulo_documento": "NOTA DE VENTA Y REMISIÓN",
         "subtitulo_documento": "Comprobante de Entrega y Despacho",
@@ -69,9 +72,10 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
         "mensaje_pie": "Favor de revisar el producto al momento de su entrega.",
         "firma_izquierda": "Entregado por (Vendedor/Repartidor)",
         "firma_derecha": "Firma de Recibido de Conformidad (Cliente)",
-        "color_primario": "#10B981",      # Verde / Marca
-        "color_tabla_fondo": "#1E293B",   # Encabezado tabla
-        "color_tabla_texto": "#FFFFFF",   # Texto encabezado tabla
+        "color_fondo_hoja": "#FFFFFF",
+        "color_primario": "#10B981",
+        "color_tabla_fondo": "#1E293B",
+        "color_tabla_texto": "#FFFFFF",
         "mostrar_firmas": True,
         "logo_bytes": None
     }
@@ -84,7 +88,7 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
 
     r_p, g_p, b_p = hex_to_rgb(config["color_primario"])
 
-    # --- Bloque Datos de la Venta y Entrega ---
+    # Tarjeta de Datos de la Venta
     pdf.set_fill_color(248, 250, 252)
     pdf.set_draw_color(226, 232, 240)
     pdf.rect(14, 25, 188, 32, 'FD')
@@ -135,7 +139,7 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
 
     pdf.ln(8)
 
-    # --- Tabla de Desglose de Productos ---
+    # Tabla de Productos
     r_tf, g_tf, b_tf = hex_to_rgb(config["color_tabla_fondo"])
     r_tt, g_tt, b_tt = hex_to_rgb(config["color_tabla_texto"])
     
@@ -150,21 +154,21 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
     pdf.cell(32, 7, 'Subtotal', border=0, align='R', fill=True)
     pdf.ln()
 
-    # Filas
+    # Partidas
     pdf.set_font('Helvetica', '', 9)
     pdf.set_text_color(30, 41, 59)
     fill = False
     for item in partidas:
         pdf.set_x(14)
         pdf.set_fill_color(248, 250, 252) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(100, 6.5, f" {item['producto']}", border='B', fill=True)
-        pdf.cell(24, 6.5, str(item['cantidad']), border='B', align='C', fill=True)
-        pdf.cell(32, 6.5, f"${float(item['precio_unitario']):,.2f}", border='B', align='R', fill=True)
-        pdf.cell(32, 6.5, f"${float(item['subtotal']):,.2f}", border='B', align='R', fill=True)
+        pdf.cell(100, 6.5, f" {item.get('producto', '')}", border='B', fill=True)
+        pdf.cell(24, 6.5, str(item.get('cantidad', 1)), border='B', align='C', fill=True)
+        pdf.cell(32, 6.5, f"${float(item.get('precio_unitario', 0)):,.2f}", border='B', align='R', fill=True)
+        pdf.cell(32, 6.5, f"${float(item.get('subtotal', 0)):,.2f}", border='B', align='R', fill=True)
         pdf.ln()
         fill = not fill
 
-    # --- Resumen Financiero ---
+    # Resumen Financiero
     pdf.ln(3)
     pdf.set_font('Helvetica', 'B', 9.5)
 
@@ -189,7 +193,7 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
     pdf.cell(32, 7, f"${saldo:,.2f}", border=1, align='R', fill=True)
     pdf.ln(16)
 
-    # --- Firmas de Conformidad (Opcional) ---
+    # Firmas
     if config.get("mostrar_firmas", True):
         pdf.set_text_color(71, 85, 105)
         pdf.set_font('Helvetica', '', 8)
