@@ -1,182 +1,68 @@
-import sqlite3
-import pandas as pd
 import requests
 import json
+import pandas as pd
 
-DB_FILE = "ventas_entregas.db"
 APPSCRIPT_URL = "https://script.google.com/macros/s/AKfycbxjB5mqL0z8U6j-ySz8UO1Hn3KbEl1nifpwtB4zfC8_sfeRx--kcVetQozQ__dVKDIVwg/exec"
 
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    
-    # Tabla principal de ventas
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ventas (
-            folio TEXT PRIMARY KEY,
-            fecha_registro TEXT,
-            cliente TEXT,
-            telefono TEXT,
-            direccion TEXT,
-            fecha_entrega TEXT,
-            horario_entrega TEXT,
-            total REAL,
-            anticipo REAL,
-            saldo REAL,
-            estado_pago TEXT,
-            estado_entrega TEXT
+def request_cloud(payload: dict):
+    try:
+        response = requests.post(
+            APPSCRIPT_URL,
+            data=json.dumps(payload),
+            headers={"Content-Type": "application/json"},
+            allow_redirects=True,
+            timeout=20
         )
-    """)
-    
-    # Detalle de productos por venta
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS ventas_detalle (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            folio_venta TEXT,
-            producto TEXT,
-            cantidad INTEGER,
-            precio_unitario REAL,
-            subtotal REAL,
-            FOREIGN KEY (folio_venta) REFERENCES ventas (folio)
-        )
-    """)
-    
-    # Tabla opcional de catálogo de productos
-    cur.execute("""
-        CREATE TABLE IF NOT EXISTS productos (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            nombre TEXT UNIQUE,
-            costo_base REAL,
-            margen_porcentaje REAL,
-            precio_venta REAL
-        )
-    """)
-    conn.commit()
-    conn.close()
+        return response.json()
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
-# -------------------------------------------------------------
-# FUNCIONES DE SINCRONIZACIÓN CON GOOGLE APPS SCRIPT
-# -------------------------------------------------------------
+# --- AUTENTICACIÓN Y REGISTRO ---
+def registrar_usuario(usuario_data: dict):
+    return request_cloud({"tipo": "registro_usuario", "usuario_data": usuario_data})
 
-def enviar_a_appscript(cabecera: dict, partidas: list):
-    """Envía la venta a Apps Script (tipo: nueva_venta)."""
-    payload = {
+def login_usuario(usuario: str, password: str):
+    return request_cloud({"tipo": "login", "usuario": usuario, "password": password})
+
+# --- OPERACIONES COMERCIALES ---
+def guardar_registro_venta(usuario_activo: str, cabecera: dict, partidas: list):
+    return request_cloud({
         "tipo": "nueva_venta",
+        "usuario_activo": usuario_activo,
         "cabecera": cabecera,
         "partidas": partidas
-    }
-    try:
-        response = requests.post(
-            APPSCRIPT_URL, 
-            data=json.dumps(payload),
-            headers={"Content-Type": "application/json"},
-            allow_redirects=True,
-            timeout=15
-        )
-        return response.json()
-    except Exception as e:
-        print(f"Error al sincronizar venta con Apps Script: {e}")
-        return {"status": "error", "message": str(e)}
+    })
 
-def enviar_producto_a_appscript(producto: dict):
-    """Envía un nuevo producto al catálogo en Sheets (tipo: nuevo_producto)."""
-    payload = {
+def guardar_producto(usuario_activo: str, producto: dict):
+    return request_cloud({
         "tipo": "nuevo_producto",
+        "usuario_activo": usuario_activo,
         "producto": producto
-    }
-    try:
-        response = requests.post(
-            APPSCRIPT_URL, 
-            data=json.dumps(payload),
-            headers={"Content-Type": "application/json"},
-            allow_redirects=True,
-            timeout=15
-        )
-        return response.json()
-    except Exception as e:
-        print(f"Error al sincronizar producto con Apps Script: {e}")
-        return {"status": "error", "message": str(e)}
+    })
 
-# -------------------------------------------------------------
-# OPERACIONES DE BASE DE DATOS LOCAL (SQLITE)
-# -------------------------------------------------------------
-
-def guardar_registro_venta(cabecera: dict, partidas: list, sincronizar_cloud: bool = True):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    
-    cur.execute("""
-        INSERT INTO ventas (
-            folio, fecha_registro, cliente, telefono, direccion,
-            fecha_entrega, horario_entrega, total, anticipo, saldo,
-            estado_pago, estado_entrega
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (
-        cabecera["folio"],
-        cabecera["fecha_registro"],
-        cabecera["cliente"],
-        cabecera["telefono"],
-        cabecera["direccion"],
-        cabecera["fecha_entrega"],
-        cabecera["horario_entrega"],
-        cabecera["total"],
-        cabecera["anticipo"],
-        cabecera["saldo"],
-        cabecera["estado_pago"],
-        cabecera["estado_entrega"]
-    ))
-    
-    for item in partidas:
-        cur.execute("""
-            INSERT INTO ventas_detalle (folio_venta, producto, cantidad, precio_unitario, subtotal)
-            VALUES (?, ?, ?, ?, ?)
-        """, (
-            cabecera["folio"],
-            item["producto"],
-            item["cantidad"],
-            item["precio_unitario"],
-            item["subtotal"]
-        ))
-        
-    conn.commit()
-    conn.close()
-
-    if sincronizar_cloud:
-        res = enviar_a_appscript(cabecera, partidas)
-        print(f"Respuesta Apps Script: {res}")
-
-def guardar_producto(nombre: str, costo_base: float, margen_porcentaje: float, precio_venta: float, sincronizar_cloud: bool = True):
-    conn = sqlite3.connect(DB_FILE)
-    cur = conn.cursor()
-    cur.execute("""
-        INSERT OR REPLACE INTO productos (nombre, costo_base, margen_porcentaje, precio_venta)
-        VALUES (?, ?, ?, ?)
-    """, (nombre, costo_base, margen_porcentaje, precio_venta))
-    conn.commit()
-    conn.close()
-
-    if sincronizar_cloud:
-        prod_data = {
-            "nombre": nombre,
-            "costo_base": costo_base,
-            "margen_porcentaje": margen_porcentaje,
-            "precio_venta": precio_venta
-        }
-        res = enviar_producto_a_appscript(prod_data)
-        print(f"Respuesta Apps Script (Producto): {res}")
-
-def obtener_ventas():
-    conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query("SELECT * FROM ventas ORDER BY fecha_registro DESC", conn)
-    conn.close()
-    return df
+def obtener_ventas(usuario_activo: str, es_admin: bool = False):
+    res = request_cloud({"tipo": "obtener_ventas", "usuario_activo": usuario_activo, "es_admin": es_admin})
+    if res.get("status") == "success" and res.get("data"):
+        return pd.DataFrame(res["data"])
+    return pd.DataFrame()
 
 def obtener_detalle_folio(folio: str):
-    conn = sqlite3.connect(DB_FILE)
-    df = pd.read_sql_query(
-        "SELECT producto, cantidad, precio_unitario, subtotal FROM ventas_detalle WHERE folio_venta = ?", 
-        conn, 
-        params=(folio,)
-    )
-    conn.close()
-    return df
+    res = request_cloud({"tipo": "obtener_detalle", "folio": folio})
+    if res.get("status") == "success" and res.get("data"):
+        return pd.DataFrame(res["data"])
+    return pd.DataFrame()
+
+# --- MÓDULO ADMINISTRADOR ---
+def admin_obtener_negocios():
+    res = request_cloud({"tipo": "admin_obtener_negocios"})
+    if res.get("status") == "success" and res.get("data"):
+        return pd.DataFrame(res["data"])
+    return pd.DataFrame()
+
+def admin_actualizar_suscripcion(usuario: str, dias_sumar: int, nuevo_estado: str):
+    return request_cloud({
+        "tipo": "admin_actualizar_suscripcion",
+        "usuario": usuario,
+        "dias_sumar": dias_sumar,
+        "nuevo_estado": nuevo_estado
+    })
