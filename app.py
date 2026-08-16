@@ -1,7 +1,6 @@
 import streamlit as st
 import datetime
 import uuid
-import base64
 import db
 import pdf_nota
 
@@ -41,7 +40,7 @@ with st.sidebar:
         firma_izq = st.text_input("Firma izquierda", value="Entregado por (Vendedor/Repartidor)")
         firma_der = st.text_input("Firma derecha", value="Firma de Recibido de Conformidad (Cliente)")
 
-# Configuración activa
+# Configuración unificada para pasar a pdf_nota
 config_pdf_usuario = {
     "titulo_documento": titulo_doc,
     "subtitulo_documento": subtitulo_doc,
@@ -183,17 +182,24 @@ with pestana_venta:
             config_personalizada=config_pdf_usuario
         )
         
-        # Visor PDF embebido en tiempo real
-        base64_pdf = base64.b64encode(pdf_bytes_live).decode('utf-8')
-        pdf_display = f'<iframe src="data:application/pdf;base64,{base64_pdf}" width="100%" height="580" type="application/pdf" style="border: 1px solid #cbd5e1; border-radius: 8px;"></iframe>'
-        st.markdown(pdf_display, unsafe_allow_html=True)
-        
+        # Renderizado de la página en imagen para evitar bloqueos del navegador
+        try:
+            import pypdfium2 as pdfium
+            pdf_doc = pdfium.PdfDocument(pdf_bytes_live)
+            page = pdf_doc.get_page(0)
+            bitmap = page.render(scale=2.0)
+            pil_image = bitmap.to_pil()
+            st.image(pil_image, caption="Previsualización en tiempo real", use_container_width=True)
+        except Exception:
+            st.info("💡 Cambia los colores o datos y descarga el PDF con el botón de abajo.")
+
         st.download_button(
             label="📄 Descargar PDF Actual",
             data=pdf_bytes_live,
             file_name=f"Nota_Venta_{folio}.pdf",
             mime="application/pdf",
-            use_container_width=True
+            use_container_width=True,
+            type="primary"
         )
 
 # --- PESTAÑA 2: CATÁLOGO ---
