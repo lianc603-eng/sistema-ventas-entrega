@@ -17,14 +17,17 @@ def request_cloud(payload: dict):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# --- AUTENTICACIÓN Y REGISTRO ---
+# --- AUTENTICACIÓN, GOOGLE Y REGISTRO ---
 def registrar_usuario(usuario_data: dict):
     return request_cloud({"tipo": "registro_usuario", "usuario_data": usuario_data})
+
+def registrar_google(usuario_data: dict):
+    return request_cloud({"tipo": "registro_google", "usuario_data": usuario_data})
 
 def login_usuario(usuario: str, password: str):
     return request_cloud({"tipo": "login", "usuario": usuario, "password": password})
 
-# --- EMPRENDIMIENTOS (PLAN PRO MULTI-MARCA) ---
+# --- EMPRENDIMIENTOS ---
 def obtener_emprendimientos(usuario: str):
     res = request_cloud({"tipo": "obtener_emprendimientos", "usuario": usuario})
     if res.get("status") == "success" and res.get("data"):
@@ -36,6 +39,14 @@ def guardar_emprendimiento(usuario: str, emprendimiento: dict):
         "tipo": "guardar_emprendimiento",
         "usuario": usuario,
         "emprendimiento": emprendimiento
+    })
+
+# --- CANAL DE SUGERENCIAS / FEEDBACK ---
+def guardar_feedback(usuario: str, feedback: dict):
+    return request_cloud({
+        "tipo": "guardar_feedback",
+        "usuario": usuario,
+        "feedback": feedback
     })
 
 # --- OPERACIONES COMERCIALES ---
