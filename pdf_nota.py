@@ -16,12 +16,11 @@ class NotaUniversalPDF(FPDF):
         self.set_fill_color(r_bg, g_bg, b_bg)
         self.rect(0, 0, 216, 279, 'F')
 
-        # Franja decorativa de color de acento
+        # Franja decorativa
         r_p, g_p, b_p = hex_to_rgb(self.config.get("color_primario", "#2563EB"))
         self.set_fill_color(r_p, g_p, b_p)
         self.rect(0, 0, 216, 6, 'F')
         
-        # Inserción de Logo si existe
         logo_bytes = self.config.get("logo_bytes")
         start_x = 14
         if logo_bytes:
@@ -142,7 +141,7 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
 
     pdf.ln(8)
 
-    # Encabezado de la Tabla
+    # Encabezado de Tabla
     r_tf, g_tf, b_tf = hex_to_rgb(config["color_tabla_fondo"])
     r_tt, g_tt, b_tt = hex_to_rgb(config["color_tabla_texto"])
     
@@ -172,7 +171,7 @@ def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict 
         pdf.ln()
         fill = not fill
 
-    # Resumen Financiero y Desglose de IVA
+    # Resumen Financiero e IVA
     pdf.ln(3)
     pdf.set_font('Helvetica', 'B', 9)
     total_base = float(cabecera.get('total', 0))
