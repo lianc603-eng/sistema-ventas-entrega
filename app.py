@@ -2,13 +2,14 @@ import streamlit as st
 import datetime
 import uuid
 import urllib.parse
+import pandas as pd
 import db
 import pdf_nota
 
 st.set_page_config(page_title="Plataforma Comercial Multi-Giro", layout="wide", page_icon="⚡")
 
 # Configuración comercial
-WHATSAPP_ADMIN = "529817360428"  # Tu WhatsApp de contacto comercial
+WHATSAPP_ADMIN = "529817360428"  # Tu WhatsApp para activaciones y propuestas
 URL_APP_PUBLICA = "https://sistemaventas1.streamlit.app"
 LIMITE_NOTAS_FREE = 5             # Límite ajustado a 5 notas al mes para el Plan FREE
 LIMITE_EMPRENDIMIENTOS_PRO = 4
@@ -25,6 +26,19 @@ if "modo_demo" not in st.session_state:
     st.session_state.modo_demo = False
 
 CATALOGO_GIROS = {
+    # Belleza, Uñas, Pestañas, Cejas y Barbería
+    "Estética / Belleza / Uñas / Pestañas / Barbería": {
+        "titulo": "COMPROBANTE DE CITA Y SERVICIOS DE BELLEZA",
+        "subtitulo": "Estudio de Belleza, Cuidado Personal y Estilismo",
+        "etiqueta_fecha": "FECHA DE LA CITA / SERVICIO:",
+        "etiqueta_lugar": "Sucursal / Cabina / Domicilio:",
+        "etiqueta_detalle": "Servicio (Uñas / Pestañas / Corte / Tinte / Cejas)",
+        "firma_izq": "Atendido por (Especialista / Estilista)",
+        "firma_der": "Conformidad de la Clienta / Cliente",
+        "color_primario": "#E11D48",
+        "color_tabla": "#881337",
+        "placeholder_prod": "Ej: Uñas Acrílicas + Lifting de Pestañas + Planchado de Cejas"
+    },
     "Pastelería / Repostería / Panadería Artesanal": {
         "titulo": "NOTA DE PEDIDO Y REMISIÓN DE REPOSTERÍA",
         "subtitulo": "Pasteles de Diseño, Postres y Repostería Fina",
@@ -35,7 +49,7 @@ CATALOGO_GIROS = {
         "firma_der": "Recibido de Conformidad (Cliente)",
         "color_primario": "#DB2777",
         "color_tabla": "#831843",
-        "placeholder_prod": "Ej: Pastel 3 Leches 30 personas"
+        "placeholder_prod": "Ej: Pastel 3 Leches 30 personas relleno de fresa"
     },
     "Aguas Naturales / Paletería / Bebidas Artesanales": {
         "titulo": "NOTA DE VENTA Y DESPACHO DE BEBIDAS",
@@ -194,7 +208,7 @@ if not st.session_state.autenticado:
             st.session_state.usuario_activo = {
                 "usuario": "demo_prospecto",
                 "nombre_comercial": "Mi Negocio Demo",
-                "giro": "Pastelería / Repostería / Panadería Artesanal",
+                "giro": "Estética / Belleza / Uñas / Pestañas / Barbería",
                 "telefono": "981 000 0000",
                 "rol": "CLIENTE",
                 "plan": "TRIAL_PRO",
@@ -203,7 +217,7 @@ if not st.session_state.autenticado:
             }
             st.session_state.lista_emprendimientos = [{
                 "nombre_comercial": "Mi Negocio Demo",
-                "giro": "Pastelería / Repostería / Panadería Artesanal",
+                "giro": "Estética / Belleza / Uñas / Pestañas / Barbería",
                 "telefono": "981 000 0000"
             }]
             st.rerun()
@@ -237,7 +251,7 @@ if not st.session_state.autenticado:
             
             with st.form("form_google_auth"):
                 g_email = st.text_input("Tu Correo de Google", placeholder="ejemplo@gmail.com")
-                g_nom = st.text_input("Nombre de tu Emprendimiento", placeholder="Ej: Creaciones Dulces")
+                g_nom = st.text_input("Nombre de tu Emprendimiento", placeholder="Ej: Nails & Lashes Studio")
                 g_giro = st.selectbox("Giro Comercial", list(CATALOGO_GIROS.keys()), key="giro_google")
                 
                 if st.form_submit_button("🔴 Continuar con Google (Prueba PRO 24h)", type="primary", use_container_width=True):
@@ -277,7 +291,7 @@ if not st.session_state.autenticado:
         with tab_registro:
             st.info("🎁 **Al registrarte obtienes Acceso Total PRO por 1 día** (Subida de logo, múltiples marcas, desglose de IVA y notas ilimitadas). Al vencer, conservas tu Plan FREE con 5 notas al mes.")
             with st.form("form_auto_registro"):
-                r_nom = st.text_input("Nombre de tu Emprendimiento", placeholder="Ej: Creaciones Dulces")
+                r_nom = st.text_input("Nombre de tu Emprendimiento", placeholder="Ej: Studio Belleza & Spa")
                 r_giro = st.selectbox("Giro Comercial", list(CATALOGO_GIROS.keys()), key="giro_reg")
                 r_tel = st.text_input("WhatsApp de Contacto", placeholder="Ej: 981 123 4567")
                 r_usr = st.text_input("Usuario deseado (sin espacios)")
@@ -452,7 +466,7 @@ with st.sidebar:
         lbl_fecha = st.text_input("Etiqueta Fecha", value=preset["etiqueta_fecha"])
         lbl_lugar = st.text_input("Etiqueta Lugar", value=preset["etiqueta_lugar"])
         lbl_detalle = st.text_input("Etiqueta Tabla", value=preset["etiqueta_detalle"])
-        mensaje_pie = st.text_area("Pie de página", value="Favor de verificar sus productos al momento de la entrega.")
+        mensaje_pie = st.text_area("Pie de página", value="Favor de verificar sus servicios al momento de la entrega.")
 
     with st.expander("🎨 Colores de Marca", expanded=False):
         col_fondo = st.color_picker("Fondo hoja", "#FFFFFF")
@@ -534,9 +548,9 @@ with tabs[0]:
             with f1:
                 folio_auto = f"DOC-{datetime.datetime.now().strftime('%Y%m%d')}-{uuid.uuid4().hex[:4].upper()}"
                 folio = st.text_input("Folio / ID", value=folio_auto)
-                cliente = st.text_input("Nombre del Cliente", placeholder="Ej: Juan Pérez")
+                cliente = st.text_input("Nombre del Cliente", placeholder="Ej: María González")
                 telefono = st.text_input("Teléfono / WhatsApp", placeholder="Ej: 981 123 4567")
-                direccion = st.text_area(lbl_lugar.replace(":", ""), placeholder="Ej: Mostrador o Domicilio")
+                direccion = st.text_area(lbl_lugar.replace(":", ""), placeholder="Ej: Sucursal Centro / Domicilio")
 
             with f2:
                 fecha_entrega = st.date_input(lbl_fecha.replace(":", ""), min_value=datetime.date.today())
@@ -553,7 +567,7 @@ with tabs[0]:
                 estado_entrega = st.selectbox("Estado", ["Pendiente / Por Entregar", "En Proceso / Ruta", "Completado / Entregado", "Cancelado"])
 
             st.markdown("---")
-            st.subheader("2. Conceptos o Productos")
+            st.subheader("2. Conceptos o Servicios")
             cp1, cp2, cp3, cp4 = st.columns([3, 1, 1, 1])
             with cp1:
                 prod_nom = st.text_input("Descripción", placeholder=preset["placeholder_prod"])
@@ -660,7 +674,7 @@ with tabs[0]:
 with tabs[1]:
     st.subheader(f"Catálogo de Precios ({negocio_nombre})")
     with st.form("form_cat"):
-        p_nom = st.text_input("Nombre del Concepto / Producto")
+        p_nom = st.text_input("Nombre del Concepto / Servicio")
         c1, c2, c3 = st.columns(3)
         with c1:
             p_costo = st.number_input("Costo Base ($)", min_value=0.0, step=10.0)
