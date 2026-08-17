@@ -9,7 +9,7 @@ st.set_page_config(page_title="Plataforma Comercial Multi-Giro", layout="wide", 
 
 # Configuración comercial
 WHATSAPP_ADMIN = "529817360428"  # Tu WhatsApp de contacto comercial
-URL_APP_PUBLICA = "https://sistema-ventas-entrega-hoymebvstqvqbtgfbneqy9.streamlit.app"
+URL_APP_PUBLICA = "https://sistemaventas1.streamlit.app"
 LIMITE_NOTAS_FREE = 5             # Límite ajustado a 5 notas al mes para el Plan FREE
 LIMITE_EMPRENDIMIENTOS_PRO = 4
 
