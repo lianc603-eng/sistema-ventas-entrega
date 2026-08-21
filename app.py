@@ -3,6 +3,7 @@ import datetime
 import uuid
 import urllib.parse
 import pandas as pd
+import pypdfium2 as pdfium
 import db
 import pdf_nota
 
@@ -272,7 +273,7 @@ cfg_guardada = db.obtener_config_pdf(u.get("usuario", "")) if not es_demo else N
 c_top1, c_top2 = st.columns([3.2, 1])
 with c_top1:
     if es_admin:
-        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Asistencia & Personalización Activo")
+        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Estudio de Diseño en Vivo Activo")
     elif es_demo:
         st.warning("🚀 **Modo de Prueba** — Estás probando la plataforma.")
     else:
@@ -320,16 +321,18 @@ with st.sidebar:
     color_prim_def = cfg_guardada["color_primario"] if cfg_guardada else preset["color_primario"]
     color_tab_def = cfg_guardada["color_tabla"] if cfg_guardada else preset["color_tabla"]
     pie_def = cfg_guardada["mensaje_pie"] if cfg_guardada else "Gracias por su preferencia."
+    fuente_def = cfg_guardada.get("fuente_familia", "Helvetica") if cfg_guardada else "Helvetica"
 
     if es_admin:
         st.markdown("---")
         st.markdown("### 🎛️ Estudio Avanzado de Diseño")
-        with st.expander("📝 Textos y Encabezados", expanded=True):
+        with st.expander("📝 Textos y Encabezados", expanded=False):
             titulo_doc = st.text_input("Título del Documento", value=titulo_def)
             subtitulo_doc = st.text_input("Subtítulo", value=subtitulo_def)
             mensaje_pie = st.text_area("Leyenda al Pie", value=pie_def)
 
-        with st.expander("🎨 Colores", expanded=True):
+        with st.expander("🎨 Colores & Tipografía", expanded=False):
+            fuente_sel = st.selectbox("Tipografía", ["Helvetica", "Times-Roman", "Courier"], index=0)
             col_primario = st.color_picker("Color de Acento", color_prim_def)
             col_tabla = st.color_picker("Fondo Tabla", color_tab_def)
             simbolo_moneda = st.selectbox("Moneda", ["$", "MXN $", "USD $", "EUR €"])
@@ -339,6 +342,7 @@ with st.sidebar:
         titulo_doc = titulo_def
         subtitulo_doc = subtitulo_def
         mensaje_pie = pie_def
+        fuente_sel = fuente_def
         col_primario = color_prim_def
         col_tabla = color_tab_def
         simbolo_moneda = "$"
@@ -346,6 +350,7 @@ with st.sidebar:
         tasa_iva = 0.0
 
 config_pdf_usuario = {
+    "fuente_familia": fuente_sel,
     "titulo_documento": titulo_doc,
     "subtitulo_documento": subtitulo_doc,
     "nombre_negocio": negocio_nombre,
@@ -522,7 +527,6 @@ with tabs[0]:
             }
             pdf_bytes_live = pdf_nota.generar_nota_pdf(cabecera_preview, partidas_render, config_personalizada=config_pdf_usuario)
             try:
-                import pypdfium2 as pdfium
                 pdf_doc = pdfium.PdfDocument(pdf_bytes_live)
                 page = pdf_doc.get_page(0)
                 bitmap = page.render(scale=1.6)
@@ -575,10 +579,10 @@ with tabs[2]:
                     st.success(f"'{p_nom}' guardado.")
                     st.rerun()
 
-# --- PESTAÑA 4: PANEL ADMIN (CON MÓDULO DE DISEÑO REMOTO) ---
+# --- PESTAÑA 4: PANEL ADMIN (ESTUDIO DE DISEÑO EN VIVO LADO A LADO) ---
 if es_admin:
     with tabs[3]:
-        st.subheader("👑 Panel de Control Maestro & Asistencia a Clientes")
+        st.subheader("👑 Panel de Control Maestro & Estudio de Diseño")
         df_usuarios = db.admin_obtener_usuarios()
         if not df_usuarios.empty:
             st.dataframe(df_usuarios, use_container_width=True)
@@ -591,13 +595,122 @@ if es_admin:
             cliente_seleccionado = st.selectbox("🎯 Selecciona un Cliente para Asistencia:", lista_clientes)
             info_cliente = df_usuarios[df_usuarios["usuario"] == cliente_seleccionado].iloc[0].to_dict()
 
-            tab_lic, tab_diseno_remoto, tab_cat_remoto = st.tabs([
+            tab_diseno_remoto, tab_lic, tab_cat_remoto = st.tabs([
+                "🎨 Estudio de Diseño en Vivo (100% Personalizado)",
                 "🔑 Licencia y Suscripción", 
-                "🎨 Personalizar Plantilla PDF del Cliente", 
                 "🏷️ Cargar Catálogo al Cliente"
             ])
 
-            # SUB-TAB 1: LICENCIA
+            # SUB-TAB 1: ESTUDIO DE DISEÑO LADO A LADO EN VIVO
+            with tab_diseno_remoto:
+                st.markdown(f"### 🎨 Estudio de Diseño Oficial: `{info_cliente.get('nombre_comercial')}` ({cliente_seleccionado})")
+                
+                cfg_actual_cliente = db.obtener_config_pdf(cliente_seleccionado)
+                preset_cliente = CATALOGO_GIROS.get(info_cliente.get("giro"), list(CATALOGO_GIROS.values())[0])
+
+                col_controles, col_preview_live = st.columns([1.1, 0.9])
+
+                with col_controles:
+                    with st.expander("📝 1. Textos y Encabezados del Comprobante", expanded=True):
+                        e_titulo = st.text_input("Título Principal", value=cfg_actual_cliente["titulo"] if cfg_actual_cliente else preset_cliente["titulo"], key="e_tit")
+                        e_subtitulo = st.text_input("Subtítulo de la Marca", value=cfg_actual_cliente["subtitulo"] if cfg_actual_cliente else preset_cliente["subtitulo"], key="e_sub")
+                        e_pie = st.text_area("Leyenda / Condiciones al Pie", value=cfg_actual_cliente["mensaje_pie"] if cfg_actual_cliente else "Gracias por su preferencia. Citas con 50% de anticipo.", key="e_pie")
+
+                    with st.expander("🏷️ 2. Etiquetas y Firmas de Conformidad", expanded=True):
+                        e_fecha = st.text_input("Etiqueta Fecha", value=cfg_actual_cliente.get("etiqueta_fecha", preset_cliente["etiqueta_fecha"]) if cfg_actual_cliente else preset_cliente["etiqueta_fecha"], key="e_fec")
+                        e_lugar = st.text_input("Etiqueta Lugar/Cabina", value=cfg_actual_cliente.get("etiqueta_lugar", preset_cliente["etiqueta_lugar"]) if cfg_actual_cliente else preset_cliente["etiqueta_lugar"], key="e_lug")
+                        e_detalle = st.text_input("Etiqueta de Tabla", value=cfg_actual_cliente.get("etiqueta_detalle", preset_cliente["etiqueta_detalle"]) if cfg_actual_cliente else preset_cliente["etiqueta_detalle"], key="e_det")
+                        
+                        c_fir1, c_fir2 = st.columns(2)
+                        with c_fir1:
+                            e_fir_izq = st.text_input("Firma Izquierda", value=preset_cliente["firma_izq"], key="e_fizq")
+                        with c_fir2:
+                            e_fir_der = st.text_input("Firma Derecha", value=preset_cliente["firma_der"], key="e_fder")
+
+                    with st.expander("🎨 3. Colores de Identidad & Tipografía", expanded=True):
+                        e_fuente = st.selectbox("Familia Tipográfica", ["Helvetica", "Times-Roman", "Courier"], index=0, key="e_fnt")
+                        
+                        c_col1, c_col2 = st.columns(2)
+                        with c_col1:
+                            e_color_prim = st.color_picker("Color Principal / Acento", cfg_actual_cliente["color_primario"] if cfg_actual_cliente else preset_cliente["color_primario"], key="e_cp")
+                        with c_col2:
+                            e_color_tab = st.color_picker("Fondo Encabezado Tabla", cfg_actual_cliente["color_tabla"] if cfg_actual_cliente else preset_cliente["color_tabla"], key="e_ct")
+
+                    with st.expander("🖼️ 4. Logotipo & Desglose de Impuestos", expanded=True):
+                        e_logo = st.file_uploader("Subir Logotipo del Cliente (PNG/JPG)", type=["png", "jpg", "jpeg"], key="e_logo_file")
+                        e_logo_bytes = e_logo.getvalue() if e_logo else None
+                        
+                        e_iva = st.toggle("Activar Desglose de IVA en comprobantes", value=False, key="e_iva_tgl")
+                        e_tasa = st.number_input("Tasa IVA (%)", min_value=0.0, value=16.0, key="e_tasa_num") if e_iva else 0.0
+
+                    if st.button("💾 GUARDAR PLANTILLA AL CLIENTE", type="primary", use_container_width=True):
+                        db.guardar_config_pdf(cliente_seleccionado, {
+                            "titulo": e_titulo,
+                            "subtitulo": e_subtitulo,
+                            "color_primario": e_color_prim,
+                            "color_tabla": e_color_tab,
+                            "mensaje_pie": e_pie,
+                            "fuente_familia": e_fuente,
+                            "etiqueta_fecha": e_fecha,
+                            "etiqueta_lugar": e_lugar,
+                            "etiqueta_detalle": e_detalle
+                        })
+                        st.success(f"¡Plantilla 100% personalizada y guardada para {cliente_seleccionado}!")
+
+                # COLUMNA DERECHA: RENDERIZADO EN TIEMPO REAL
+                with col_preview_live:
+                    st.markdown("#### 👁️ Vista Previa en Vivo del PDF")
+                    
+                    config_render_live = {
+                        "fuente_familia": e_fuente,
+                        "titulo_documento": e_titulo,
+                        "subtitulo_documento": e_subtitulo,
+                        "nombre_negocio": info_cliente.get("nombre_comercial", "Marca"),
+                        "contacto_negocio": info_cliente.get("telefono", "981 000 0000"),
+                        "mensaje_pie": e_pie,
+                        "etiqueta_fecha_operativa": e_fecha,
+                        "etiqueta_lugar_operativo": e_lugar,
+                        "etiqueta_detalle": e_detalle,
+                        "firma_izquierda": e_fir_izq,
+                        "firma_derecha": e_fir_der,
+                        "moneda": "$",
+                        "color_fondo_hoja": "#FFFFFF",
+                        "color_primario": e_color_prim,
+                        "color_tabla_fondo": e_color_tab,
+                        "color_tabla_texto": "#FFFFFF",
+                        "mostrar_firmas": True,
+                        "desglosar_iva": e_iva,
+                        "tasa_iva": e_tasa,
+                        "logo_bytes": e_logo_bytes
+                    }
+                    
+                    cabecera_demo = {
+                        "folio": "DEMO-001",
+                        "cliente": "María González (Muestra)",
+                        "telefono": "981 123 4567",
+                        "direccion": "Sucursal Principal / Cabina",
+                        "fecha_entrega": str(datetime.date.today()),
+                        "fecha_registro": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "total": 650.0,
+                        "anticipo": 200.0,
+                        "saldo": 450.0
+                    }
+                    partidas_demo = [
+                        {"producto": f"Servicio: {preset_cliente['placeholder_prod']}", "cantidad": 1, "precio_unitario": 450.0, "subtotal": 450.0},
+                        {"producto": "Mantenimiento / Aplicación adicional", "cantidad": 1, "precio_unitario": 200.0, "subtotal": 200.0}
+                    ]
+
+                    pdf_bytes_cliente_live = pdf_nota.generar_nota_pdf(cabecera_demo, partidas_demo, config_personalizada=config_render_live)
+                    
+                    try:
+                        pdf_doc_live = pdfium.PdfDocument(pdf_bytes_cliente_live)
+                        page_l = pdf_doc_live.get_page(0)
+                        bitmap_l = page_l.render(scale=1.8)
+                        st.image(bitmap_l.to_pil(), caption="Vista previa en tiempo real", use_container_width=True)
+                    except Exception:
+                        st.info("💡 Cambia los colores y textos a la izquierda.")
+
+            # SUB-TAB 2: LICENCIA
             with tab_lic:
                 st.markdown(f"**Gestionando:** `{cliente_seleccionado}` | Plan actual: **{info_cliente.get('plan')}**")
                 c_u2, c_u3 = st.columns(2)
@@ -611,38 +724,14 @@ if es_admin:
                     st.success(f"¡Suscripción de {cliente_seleccionado} actualizada!")
                     st.rerun()
 
-            # SUB-TAB 2: DISEÑAR Y MODIFICAR SU PDF
-            with tab_diseno_remoto:
-                st.markdown(f"### 🎨 Estudio de Diseño para: `{info_cliente.get('nombre_comercial')}` ({cliente_seleccionado})")
-                cfg_actual_cliente = db.obtener_config_pdf(cliente_seleccionado)
-                preset_cliente = CATALOGO_GIROS.get(info_cliente.get("giro"), list(CATALOGO_GIROS.values())[0])
-
-                with st.form("form_diseno_remoto"):
-                    c_d1, c_d2 = st.columns(2)
-                    with c_d1:
-                        rem_titulo = st.text_input("Título del Comprobante", value=cfg_actual_cliente["titulo"] if cfg_actual_cliente else preset_cliente["titulo"])
-                        rem_subtitulo = st.text_input("Subtítulo de la Marca", value=cfg_actual_cliente["subtitulo"] if cfg_actual_cliente else preset_cliente["subtitulo"])
-                        rem_pie = st.text_area("Leyenda o Condiciones al Pie", value=cfg_actual_cliente["mensaje_pie"] if cfg_actual_cliente else "Gracias por su preferencia.")
-                    with c_d2:
-                        rem_color_prim = st.color_picker("Color Principal / Acento", cfg_actual_cliente["color_primario"] if cfg_actual_cliente else preset_cliente["color_primario"])
-                        rem_color_tab = st.color_picker("Color Encabezado Tabla", cfg_actual_cliente["color_tabla"] if cfg_actual_cliente else preset_cliente["color_tabla"])
-
-                    if st.form_submit_button("🎨 Guardar Plantilla en la Cuenta del Cliente", type="primary"):
-                        db.guardar_config_pdf(cliente_seleccionado, {
-                            "titulo": rem_titulo,
-                            "subtitulo": rem_subtitulo,
-                            "color_primario": rem_color_prim,
-                            "color_tabla": rem_color_tab,
-                            "mensaje_pie": rem_pie
-                        })
-                        st.success(f"¡Diseño guardado exitosamente para {cliente_seleccionado}!")
-
-            # SUB-TAB 3: CARGARLE PRODUCTOS
+            # SUB-TAB 3: CATÁLOGO
             with tab_cat_remoto:
                 st.markdown(f"**Catálogo de:** `{info_cliente.get('nombre_comercial')}`")
                 df_cat_cliente = db.obtener_productos(cliente_seleccionado)
                 if not df_cat_cliente.empty:
                     st.dataframe(df_cat_cliente[["nombre", "precio_venta"]], use_container_width=True)
+                else:
+                    st.caption("El cliente aún no tiene productos registrados.")
 
                 with st.form("form_add_prod_remoto"):
                     c_np1, c_np2 = st.columns([3, 1])
