@@ -172,7 +172,7 @@ if not es_usuario_admin:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# VISTA: ACCESO Y REGISTRO (SIN LLAMADAS DE RED BLOQUEANTES)
+# VISTA: ACCESO
 # =========================================================
 if not st.session_state.autenticado:
     st.markdown("<h2 style='text-align: center;'>⚡ Generador de Notas & Comprobantes</h2>", unsafe_allow_html=True)
@@ -255,7 +255,6 @@ es_admin = (u.get("rol") == "ADMIN")
 plan = u.get("plan", "FREE")
 es_demo = st.session_state.modo_demo
 
-# Carga de marcas protegida
 if not st.session_state.lista_emprendimientos:
     if not es_demo:
         st.session_state.lista_emprendimientos = db.obtener_emprendimientos(u.get("usuario", ""))
@@ -267,12 +266,13 @@ if not st.session_state.lista_emprendimientos:
         }]
 
 emprendimientos_usuario = st.session_state.lista_emprendimientos
+cfg_guardada = db.obtener_config_pdf(u.get("usuario", "")) if not es_demo else None
 
 # Barra superior
 c_top1, c_top2 = st.columns([3.2, 1])
 with c_top1:
     if es_admin:
-        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Asistencia Activo")
+        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Asistencia & Personalización Activo")
     elif es_demo:
         st.warning("🚀 **Modo de Prueba** — Estás probando la plataforma.")
     else:
@@ -315,26 +315,32 @@ with st.sidebar:
         st.caption("🔒 *Logotipo disponible en Plan PRO.*")
         logo_bytes = None
 
+    titulo_def = cfg_guardada["titulo"] if cfg_guardada else preset["titulo"]
+    subtitulo_def = cfg_guardada["subtitulo"] if cfg_guardada else preset["subtitulo"]
+    color_prim_def = cfg_guardada["color_primario"] if cfg_guardada else preset["color_primario"]
+    color_tab_def = cfg_guardada["color_tabla"] if cfg_guardada else preset["color_tabla"]
+    pie_def = cfg_guardada["mensaje_pie"] if cfg_guardada else "Gracias por su preferencia."
+
     if es_admin:
         st.markdown("---")
         st.markdown("### 🎛️ Estudio Avanzado de Diseño")
         with st.expander("📝 Textos y Encabezados", expanded=True):
-            titulo_doc = st.text_input("Título del Documento", value=preset["titulo"])
-            subtitulo_doc = st.text_input("Subtítulo", value=preset["subtitulo"])
-            mensaje_pie = st.text_area("Leyenda al Pie", value="Gracias por su preferencia.")
+            titulo_doc = st.text_input("Título del Documento", value=titulo_def)
+            subtitulo_doc = st.text_input("Subtítulo", value=subtitulo_def)
+            mensaje_pie = st.text_area("Leyenda al Pie", value=pie_def)
 
         with st.expander("🎨 Colores", expanded=True):
-            col_primario = st.color_picker("Color de Acento", preset["color_primario"])
-            col_tabla = st.color_picker("Fondo Tabla", preset["color_tabla"])
+            col_primario = st.color_picker("Color de Acento", color_prim_def)
+            col_tabla = st.color_picker("Fondo Tabla", color_tab_def)
             simbolo_moneda = st.selectbox("Moneda", ["$", "MXN $", "USD $", "EUR €"])
             desglosar_iva = st.toggle("Activar Desglose de IVA", value=False)
             tasa_iva = 16.0 if desglosar_iva else 0.0
     else:
-        titulo_doc = preset["titulo"]
-        subtitulo_doc = preset["subtitulo"]
-        mensaje_pie = "Gracias por su preferencia."
-        col_primario = preset["color_primario"]
-        col_tabla = preset["color_tabla"]
+        titulo_doc = titulo_def
+        subtitulo_doc = subtitulo_def
+        mensaje_pie = pie_def
+        col_primario = color_prim_def
+        col_tabla = color_tab_def
         simbolo_moneda = "$"
         desglosar_iva = False
         tasa_iva = 0.0
@@ -569,10 +575,10 @@ with tabs[2]:
                     st.success(f"'{p_nom}' guardado.")
                     st.rerun()
 
-# --- PESTAÑA 4: PANEL ADMIN ---
+# --- PESTAÑA 4: PANEL ADMIN (CON MÓDULO DE DISEÑO REMOTO) ---
 if es_admin:
     with tabs[3]:
-        st.subheader("👑 Panel de Control Maestro & Asistencia")
+        st.subheader("👑 Panel de Control Maestro & Asistencia a Clientes")
         df_usuarios = db.admin_obtener_usuarios()
         if not df_usuarios.empty:
             st.dataframe(df_usuarios, use_container_width=True)
@@ -585,11 +591,13 @@ if es_admin:
             cliente_seleccionado = st.selectbox("🎯 Selecciona un Cliente para Asistencia:", lista_clientes)
             info_cliente = df_usuarios[df_usuarios["usuario"] == cliente_seleccionado].iloc[0].to_dict()
 
-            tab_lic, tab_cat_remoto = st.tabs([
+            tab_lic, tab_diseno_remoto, tab_cat_remoto = st.tabs([
                 "🔑 Licencia y Suscripción", 
+                "🎨 Personalizar Plantilla PDF del Cliente", 
                 "🏷️ Cargar Catálogo al Cliente"
             ])
 
+            # SUB-TAB 1: LICENCIA
             with tab_lic:
                 st.markdown(f"**Gestionando:** `{cliente_seleccionado}` | Plan actual: **{info_cliente.get('plan')}**")
                 c_u2, c_u3 = st.columns(2)
@@ -603,13 +611,38 @@ if es_admin:
                     st.success(f"¡Suscripción de {cliente_seleccionado} actualizada!")
                     st.rerun()
 
+            # SUB-TAB 2: DISEÑAR Y MODIFICAR SU PDF
+            with tab_diseno_remoto:
+                st.markdown(f"### 🎨 Estudio de Diseño para: `{info_cliente.get('nombre_comercial')}` ({cliente_seleccionado})")
+                cfg_actual_cliente = db.obtener_config_pdf(cliente_seleccionado)
+                preset_cliente = CATALOGO_GIROS.get(info_cliente.get("giro"), list(CATALOGO_GIROS.values())[0])
+
+                with st.form("form_diseno_remoto"):
+                    c_d1, c_d2 = st.columns(2)
+                    with c_d1:
+                        rem_titulo = st.text_input("Título del Comprobante", value=cfg_actual_cliente["titulo"] if cfg_actual_cliente else preset_cliente["titulo"])
+                        rem_subtitulo = st.text_input("Subtítulo de la Marca", value=cfg_actual_cliente["subtitulo"] if cfg_actual_cliente else preset_cliente["subtitulo"])
+                        rem_pie = st.text_area("Leyenda o Condiciones al Pie", value=cfg_actual_cliente["mensaje_pie"] if cfg_actual_cliente else "Gracias por su preferencia.")
+                    with c_d2:
+                        rem_color_prim = st.color_picker("Color Principal / Acento", cfg_actual_cliente["color_primario"] if cfg_actual_cliente else preset_cliente["color_primario"])
+                        rem_color_tab = st.color_picker("Color Encabezado Tabla", cfg_actual_cliente["color_tabla"] if cfg_actual_cliente else preset_cliente["color_tabla"])
+
+                    if st.form_submit_button("🎨 Guardar Plantilla en la Cuenta del Cliente", type="primary"):
+                        db.guardar_config_pdf(cliente_seleccionado, {
+                            "titulo": rem_titulo,
+                            "subtitulo": rem_subtitulo,
+                            "color_primario": rem_color_prim,
+                            "color_tabla": rem_color_tab,
+                            "mensaje_pie": rem_pie
+                        })
+                        st.success(f"¡Diseño guardado exitosamente para {cliente_seleccionado}!")
+
+            # SUB-TAB 3: CARGARLE PRODUCTOS
             with tab_cat_remoto:
                 st.markdown(f"**Catálogo de:** `{info_cliente.get('nombre_comercial')}`")
                 df_cat_cliente = db.obtener_productos(cliente_seleccionado)
                 if not df_cat_cliente.empty:
                     st.dataframe(df_cat_cliente[["nombre", "precio_venta"]], use_container_width=True)
-                else:
-                    st.caption("El cliente aún no tiene productos registrados.")
 
                 with st.form("form_add_prod_remoto"):
                     c_np1, c_np2 = st.columns([3, 1])
