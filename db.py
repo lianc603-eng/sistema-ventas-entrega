@@ -11,9 +11,11 @@ def request_cloud(payload: dict):
             data=json.dumps(payload),
             headers={"Content-Type": "application/json"},
             allow_redirects=True,
-            timeout=20
+            timeout=8  # Timeout corto para evitar que la app se congele
         )
-        return response.json()
+        if response.status_code == 200:
+            return response.json()
+        return {"status": "error", "message": f"Error HTTP {response.status_code}"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -26,6 +28,8 @@ def login_usuario(usuario: str, password: str):
 
 # --- EMPRENDIMIENTOS ---
 def obtener_emprendimientos(usuario: str):
+    if not usuario:
+        return []
     res = request_cloud({"tipo": "obtener_emprendimientos", "usuario": usuario})
     if res.get("status") == "success" and res.get("data"):
         return res["data"]
@@ -38,7 +42,7 @@ def guardar_emprendimiento(usuario: str, emprendimiento: dict):
         "emprendimiento": emprendimiento
     })
 
-# --- CATÁLOGO DE PRODUCTOS (POR USUARIO) ---
+# --- CATÁLOGO ---
 def guardar_producto(usuario_activo: str, producto: dict):
     return request_cloud({
         "tipo": "nuevo_producto",
@@ -47,12 +51,14 @@ def guardar_producto(usuario_activo: str, producto: dict):
     })
 
 def obtener_productos(usuario_activo: str):
+    if not usuario_activo:
+        return pd.DataFrame()
     res = request_cloud({"tipo": "obtener_productos", "usuario_activo": usuario_activo})
     if res.get("status") == "success" and res.get("data"):
         return pd.DataFrame(res["data"])
     return pd.DataFrame()
 
-# --- CONFIGURACIÓN DE PLANTILLA PDF POR USUARIO ---
+# --- CONFIGURACIÓN DE PLANTILLA PDF ---
 def guardar_config_pdf(usuario_destino: str, config: dict):
     return request_cloud({
         "tipo": "guardar_config_pdf",
@@ -61,12 +67,14 @@ def guardar_config_pdf(usuario_destino: str, config: dict):
     })
 
 def obtener_config_pdf(usuario: str):
+    if not usuario:
+        return None
     res = request_cloud({"tipo": "obtener_config_pdf", "usuario": usuario})
     if res.get("status") == "success":
         return res.get("data")
     return None
 
-# --- VENTAS Y COMPROBANTES ---
+# --- VENTAS ---
 def guardar_registro_venta(usuario_activo: str, cabecera: dict, partidas: list):
     return request_cloud({
         "tipo": "nueva_venta",
@@ -76,12 +84,16 @@ def guardar_registro_venta(usuario_activo: str, cabecera: dict, partidas: list):
     })
 
 def obtener_ventas(usuario_activo: str, es_admin: bool = False):
+    if not usuario_activo:
+        return pd.DataFrame()
     res = request_cloud({"tipo": "obtener_ventas", "usuario_activo": usuario_activo, "es_admin": es_admin})
     if res.get("status") == "success" and res.get("data"):
         return pd.DataFrame(res["data"])
     return pd.DataFrame()
 
 def obtener_detalle_folio(folio: str):
+    if not folio:
+        return pd.DataFrame()
     res = request_cloud({"tipo": "obtener_detalle", "folio": folio})
     if res.get("status") == "success" and res.get("data"):
         return pd.DataFrame(res["data"])
