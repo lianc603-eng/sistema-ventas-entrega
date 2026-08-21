@@ -1,229 +1,202 @@
-from fpdf import FPDF
-import io
+from io import BytesIO
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image as RLImage
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.lib.enums import TA_CENTER, TA_RIGHT, TA_LEFT
 
-def hex_to_rgb(hex_str: str):
-    hex_str = hex_str.lstrip("#")
-    return tuple(int(hex_str[i:i+2], 16) for i in (0, 2, 4))
+def hex_a_color(hex_str: str, default="#000000"):
+    try:
+        hex_clean = hex_str.lstrip("#")
+        if len(hex_clean) == 6:
+            r = int(hex_clean[0:2], 16) / 255.0
+            g = int(hex_clean[2:4], 16) / 255.0
+            b = int(hex_clean[4:6], 16) / 255.0
+            return colors.Color(r, g, b)
+    except Exception:
+        pass
+    return colors.HexColor(default)
 
-class NotaUniversalPDF(FPDF):
-    def __init__(self, config: dict, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.config = config
-
-    def header(self):
-        # Color de fondo de la hoja completa
-        r_bg, g_bg, b_bg = hex_to_rgb(self.config.get("color_fondo_hoja", "#FFFFFF"))
-        self.set_fill_color(r_bg, g_bg, b_bg)
-        self.rect(0, 0, 216, 279, 'F')
-
-        # Franja decorativa
-        r_p, g_p, b_p = hex_to_rgb(self.config.get("color_primario", "#2563EB"))
-        self.set_fill_color(r_p, g_p, b_p)
-        self.rect(0, 0, 216, 6, 'F')
-        
-        logo_bytes = self.config.get("logo_bytes")
-        start_x = 14
-        if logo_bytes:
-            try:
-                self.image(io.BytesIO(logo_bytes), x=14, y=10, h=16)
-                start_x = 46
-            except Exception:
-                pass
-        
-        self.set_xy(start_x, 11)
-        self.set_font('Helvetica', 'B', 13)
-        self.set_text_color(15, 23, 42)
-        self.cell(105, 6, self.config.get("titulo_documento", "COMPROBANTE COMERCIAL"), ln=False)
-        
-        self.set_font('Helvetica', '', 8.5)
-        self.set_text_color(100, 116, 139)
-        self.cell(202 - start_x - 105, 6, self.config.get("subtitulo_documento", "Documento de Control"), ln=True, align='R')
-        
-        negocio = self.config.get("nombre_negocio", "")
-        contacto = self.config.get("contacto_negocio", "")
-        if negocio or contacto:
-            self.set_xy(start_x, 17)
-            self.set_font('Helvetica', 'B', 8)
-            self.set_text_color(71, 85, 105)
-            self.cell(105, 4, negocio, ln=False)
-            self.set_font('Helvetica', '', 8)
-            self.cell(202 - start_x - 105, 4, contacto, ln=True, align='R')
-
-        self.ln(4)
-
-    def footer(self):
-        self.set_y(-18)
-        self.set_font('Helvetica', 'I', 8)
-        self.set_text_color(148, 163, 184)
-        self.cell(0, 4, self.config.get("mensaje_pie", "Gracias por su preferencia."), align='C', ln=True)
-        self.cell(0, 4, f'Página {self.page_no()}/{{nb}}', align='C')
-
-def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict = None) -> bytes:
-    config = {
-        "titulo_documento": "COMPROBANTE COMERCIAL",
-        "subtitulo_documento": "Orden de Servicio / Venta",
-        "nombre_negocio": "",
-        "contacto_negocio": "",
-        "mensaje_pie": "Gracias por su preferencia.",
-        "etiqueta_fecha_operativa": "FECHA DE ENTREGA / SERVICIO:",
-        "etiqueta_lugar_operativo": "Lugar / Ubicación:",
-        "etiqueta_detalle": "Descripción del Concepto / Artículo",
-        "firma_izquierda": "Emitido por (Responsable)",
-        "firma_derecha": "Conformidad del Cliente",
-        "moneda": "$",
-        "color_fondo_hoja": "#FFFFFF",
-        "color_primario": "#2563EB",
-        "color_tabla_fondo": "#0F172A",
-        "color_tabla_texto": "#FFFFFF",
-        "mostrar_firmas": True,
-        "desglosar_iva": False,
-        "tasa_iva": 16.0,
-        "logo_bytes": None
-    }
-    if config_personalizada:
-        config.update(config_personalizada)
-
-    pdf = NotaUniversalPDF(config=config, orientation='P', unit='mm', format='Letter')
-    pdf.alias_nb_pages()
-    pdf.add_page()
-
-    r_p, g_p, b_p = hex_to_rgb(config["color_primario"])
-    simbolo = config.get("moneda", "$")
-
-    # Tarjeta de Datos Generales
-    pdf.set_fill_color(248, 250, 252)
-    pdf.set_draw_color(226, 232, 240)
-    pdf.rect(14, 25, 188, 32, 'FD')
-
-    # Fila 1
-    pdf.set_xy(18, 28)
-    pdf.set_font('Helvetica', 'B', 9)
-    pdf.set_text_color(71, 85, 105)
-    pdf.cell(24, 5, 'Folio / ID:', border=0)
-    pdf.set_font('Helvetica', 'B', 10)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(66, 5, str(cabecera.get('folio', '')), border=0)
-
-    pdf.set_font('Helvetica', 'B', 8)
-    pdf.set_text_color(r_p, g_p, b_p)
-    pdf.cell(42, 5, config.get("etiqueta_fecha_operativa", "FECHA:"), border=0)
-    pdf.set_font('Helvetica', 'B', 9.5)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(40, 5, str(cabecera.get('fecha_entrega', '')), border=0, ln=True)
-
-    # Fila 2
-    pdf.set_x(18)
-    pdf.set_font('Helvetica', 'B', 9)
-    pdf.set_text_color(71, 85, 105)
-    pdf.cell(24, 5, 'Cliente / Titular:', border=0)
-    pdf.set_font('Helvetica', '', 9)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(66, 5, str(cabecera.get('cliente', ''))[:30], border=0)
-
-    pdf.set_font('Helvetica', '', 8.5)
-    pdf.set_text_color(71, 85, 105)
-    pdf.cell(42, 5, 'Horario / Turno:', border=0)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(40, 5, str(cabecera.get('horario_entrega', 'N/A')), border=0, ln=True)
-
-    # Fila 3
-    pdf.set_x(18)
-    pdf.set_font('Helvetica', 'B', 9)
-    pdf.set_text_color(71, 85, 105)
-    pdf.cell(24, 5, 'Contacto / Tel:', border=0)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(66, 5, str(cabecera.get('telefono', 'S/N')), border=0)
-
-    pdf.set_text_color(71, 85, 105)
-    pdf.cell(42, 5, config.get("etiqueta_lugar_operativo", "Lugar / Ubicación:"), border=0)
-    pdf.set_text_color(15, 23, 42)
-    pdf.cell(40, 5, str(cabecera.get('direccion', 'Mostrador'))[:25], border=0, ln=True)
-
-    pdf.ln(8)
-
-    # Encabezado de Tabla
-    r_tf, g_tf, b_tf = hex_to_rgb(config["color_tabla_fondo"])
-    r_tt, g_tt, b_tt = hex_to_rgb(config["color_tabla_texto"])
+def generar_nota_pdf(cabecera: dict, partidas: list, config_personalizada: dict = None):
+    cfg = config_personalizada or {}
     
-    pdf.set_x(14)
-    pdf.set_fill_color(r_tf, g_tf, b_tf)
-    pdf.set_text_color(r_tt, g_tt, b_tt)
-    pdf.set_font('Helvetica', 'B', 8.5)
+    # Fuentes y Textos
+    fuente_familia = cfg.get("fuente_familia", "Helvetica")
+    fuente_bold = f"{fuente_familia}-Bold" if fuente_familia in ["Helvetica", "Times-Roman", "Courier"] else "Helvetica-Bold"
+    
+    titulo_doc = cfg.get("titulo_documento", "COMPROBANTE DE PAGO")
+    subtitulo_doc = cfg.get("subtitulo_documento", "Servicios Profesionales")
+    nombre_negocio = cfg.get("nombre_negocio", "Mi Negocio")
+    contacto_negocio = cfg.get("contacto_negocio", "981 000 0000")
+    mensaje_pie = cfg.get("mensaje_pie", "Gracias por su preferencia.")
+    lbl_fecha = cfg.get("etiqueta_fecha_operativa", "Fecha:")
+    lbl_lugar = cfg.get("etiqueta_lugar_operativo", "Lugar:")
+    lbl_detalle = cfg.get("etiqueta_detalle", "Descripción")
+    firma_izq = cfg.get("firma_izquierda", "Entregado por")
+    firma_der = cfg.get("firma_derecha", "Recibido de Conformidad")
+    simbolo_moneda = cfg.get("moneda", "$")
+    
+    # Colores
+    col_acento = hex_a_color(cfg.get("color_primario", "#E11D48"))
+    col_tabla = hex_a_color(cfg.get("color_tabla_fondo", "#881337"))
+    col_txt_tabla = hex_a_color(cfg.get("color_tabla_texto", "#FFFFFF"))
+    
+    # Opciones
+    mostrar_firmas = cfg.get("mostrar_firmas", True)
+    desglosar_iva = cfg.get("desglosar_iva", False)
+    tasa_iva = float(cfg.get("tasa_iva", 16.0))
+    logo_bytes = cfg.get("logo_bytes", None)
 
-    etiqueta_concepto = f" {config.get('etiqueta_detalle', 'Descripción / Concepto')}"
-    pdf.cell(100, 7, etiqueta_concepto[:40], border=0, fill=True)
-    pdf.cell(24, 7, 'Cant.', border=0, align='C', fill=True)
-    pdf.cell(32, 7, f'P. Unit ({simbolo})', border=0, align='R', fill=True)
-    pdf.cell(32, 7, f'Importe ({simbolo})', border=0, align='R', fill=True)
-    pdf.ln()
+    buffer = BytesIO()
+    doc = SimpleDocTemplate(
+        buffer,
+        pagesize=letter,
+        rightMargin=36,
+        leftMargin=36,
+        topMargin=36,
+        bottomMargin=36
+    )
 
-    # Partidas
-    pdf.set_font('Helvetica', '', 8.5)
-    pdf.set_text_color(30, 41, 59)
-    fill = False
-    for item in partidas:
-        pdf.set_x(14)
-        pdf.set_fill_color(248, 250, 252) if fill else pdf.set_fill_color(255, 255, 255)
-        pdf.cell(100, 6.5, f" {item.get('producto', '')}", border='B', fill=True)
-        pdf.cell(24, 6.5, str(item.get('cantidad', 1)), border='B', align='C', fill=True)
-        pdf.cell(32, 6.5, f"{simbolo}{float(item.get('precio_unitario', 0)):,.2f}", border='B', align='R', fill=True)
-        pdf.cell(32, 6.5, f"{simbolo}{float(item.get('subtotal', 0)):,.2f}", border='B', align='R', fill=True)
-        pdf.ln()
-        fill = not fill
+    styles = getSampleStyleSheet()
+    
+    st_titulo = ParagraphStyle("TitDoc", parent=styles["Normal"], fontName=fuente_bold, fontSize=15, textColor=col_acento, leading=18, alignment=TA_LEFT)
+    st_sub = ParagraphStyle("SubDoc", parent=styles["Normal"], fontName=fuente_familia, fontSize=9, textColor=colors.HexColor("#475569"), leading=12, alignment=TA_LEFT)
+    st_negocio = ParagraphStyle("NegDoc", parent=styles["Normal"], fontName=fuente_bold, fontSize=13, textColor=colors.HexColor("#0F172A"), leading=15, alignment=TA_RIGHT)
+    st_contacto = ParagraphStyle("ContDoc", parent=styles["Normal"], fontName=fuente_familia, fontSize=9, textColor=colors.HexColor("#64748B"), leading=12, alignment=TA_RIGHT)
+    st_cell = ParagraphStyle("Cell", parent=styles["Normal"], fontName=fuente_familia, fontSize=9, leading=11)
+    st_cell_h = ParagraphStyle("CellH", parent=styles["Normal"], fontName=fuente_bold, fontSize=9, textColor=col_txt_tabla, leading=11, alignment=TA_CENTER)
 
-    # Resumen Financiero e IVA
-    pdf.ln(3)
-    pdf.set_font('Helvetica', 'B', 9)
-    total_base = float(cabecera.get('total', 0))
-    anticipo = float(cabecera.get('anticipo', 0))
+    story = []
 
-    if config.get("desglosar_iva", False):
-        tasa = float(config.get("tasa_iva", 16.0))
-        subtotal_neto = total_base / (1 + (tasa / 100))
-        iva_calculado = total_base - subtotal_neto
+    # ENCABEZADO CON LOGO O TEXTO
+    logo_elem = None
+    if logo_bytes:
+        try:
+            img_io = BytesIO(logo_bytes)
+            logo_elem = RLImage(img_io, width=80, height=50)
+        except Exception:
+            logo_elem = None
 
-        pdf.set_x(14)
-        pdf.cell(124, 4.5, '', border=0)
-        pdf.cell(32, 4.5, 'Subtotal Neto:', border=0, align='R')
-        pdf.cell(32, 4.5, f"{simbolo}{subtotal_neto:,.2f}", border=0, align='R', ln=True)
+    if logo_elem:
+        fila_h = [
+            logo_elem,
+            [Paragraph(titulo_doc, st_titulo), Paragraph(subtitulo_doc, st_sub)],
+            [Paragraph(nombre_negocio, st_negocio), Paragraph(f"WhatsApp: {contacto_negocio}", st_contacto)]
+        ]
+        t_head = Table([fila_h], colWidths=[90, 260, 190])
+    else:
+        fila_h = [
+            [Paragraph(titulo_doc, st_titulo), Paragraph(subtitulo_doc, st_sub)],
+            [Paragraph(nombre_negocio, st_negocio), Paragraph(f"WhatsApp: {contacto_negocio}", st_contacto)]
+        ]
+        t_head = Table([fila_h], colWidths=[340, 200])
 
-        pdf.set_x(14)
-        pdf.cell(124, 4.5, '', border=0)
-        pdf.cell(32, 4.5, f'IVA ({tasa:g}%):', border=0, align='R')
-        pdf.cell(32, 4.5, f"{simbolo}{iva_calculado:,.2f}", border=0, align='R', ln=True)
+    t_head.setStyle(TableStyle([
+        ('VALIGN', (0,0), (-1,-1), 'MIDDLE'),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 0),
+        ('TOPPADDING', (0,0), (-1,-1), 0),
+    ]))
+    story.append(t_head)
+    story.append(Spacer(1, 12))
 
-    pdf.set_x(14)
-    pdf.cell(124, 5, '', border=0)
-    pdf.cell(32, 5, 'Total:', border=0, align='R')
-    pdf.cell(32, 5, f"{simbolo}{total_base:,.2f}", border=0, align='R', ln=True)
+    # BLOQUE DE DATOS GENERALES
+    datos_cliente = [
+        [
+            Paragraph(f"<b>Folio:</b> {cabecera.get('folio', 'N/A')}", st_cell),
+            Paragraph(f"<b>{lbl_fecha}</b> {cabecera.get('fecha_entrega', '')}", st_cell)
+        ],
+        [
+            Paragraph(f"<b>Cliente:</b> {cabecera.get('cliente', 'Mostrador')}", st_cell),
+            Paragraph(f"<b>WhatsApp:</b> {cabecera.get('telefono', 'S/N')}", st_cell)
+        ],
+        [
+            Paragraph(f"<b>{lbl_lugar}</b> {cabecera.get('direccion', 'Mostrador')}", st_cell),
+            Paragraph(f"<b>Emisión:</b> {cabecera.get('fecha_registro', '')}", st_cell)
+        ]
+    ]
+    t_cli = Table(datos_cliente, colWidths=[320, 220])
+    t_cli.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F8FAFC")),
+        ('BOX', (0,0), (-1,-1), 1, colors.HexColor("#E2E8F0")),
+        ('INNERGRID', (0,0), (-1,-1), 0.5, colors.HexColor("#F1F5F9")),
+        ('TOPPADDING', (0,0), (-1,-1), 4),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 4),
+    ]))
+    story.append(t_cli)
+    story.append(Spacer(1, 14))
 
-    if anticipo > 0:
-        pdf.set_x(14)
-        pdf.cell(124, 5, '', border=0)
-        pdf.cell(32, 5, 'Anticipo / Adelanto:', border=0, align='R')
-        pdf.cell(32, 5, f"{simbolo}{anticipo:,.2f}", border=0, align='R', ln=True)
+    # TABLA DE CONCEPTOS
+    tabla_data = [[
+        Paragraph(lbl_detalle, st_cell_h),
+        Paragraph("Cant.", st_cell_h),
+        Paragraph(f"P. Unit ({simbolo_moneda})", st_cell_h),
+        Paragraph(f"Subtotal ({simbolo_moneda})", st_cell_h)
+    ]]
 
-    saldo = float(cabecera.get('saldo', 0))
-    pdf.set_x(14)
-    pdf.set_fill_color(254, 242, 242) if saldo > 0 else pdf.set_fill_color(240, 253, 244)
-    pdf.set_text_color(220, 38, 38) if saldo > 0 else pdf.set_text_color(22, 101, 52)
-    pdf.cell(124, 6.5, '', border=0)
-    pdf.cell(32, 6.5, 'SALDO A LIQUIDAR:', border=1, align='R', fill=True)
-    pdf.cell(32, 6.5, f"{simbolo}{saldo:,.2f}", border=1, align='R', fill=True)
-    pdf.ln(16)
+    for p in partidas:
+        tabla_data.append([
+            Paragraph(str(p.get("producto", "")), st_cell),
+            Paragraph(str(p.get("cantidad", 1)), st_cell),
+            Paragraph(f"{float(p.get('precio_unitario', 0)):,.2f}", st_cell),
+            Paragraph(f"{float(p.get('subtotal', 0)):,.2f}", st_cell)
+        ])
 
-    # Firmas
-    if config.get("mostrar_firmas", True):
-        pdf.set_text_color(71, 85, 105)
-        pdf.set_font('Helvetica', '', 8)
-        pdf.set_x(14)
-        pdf.cell(85, 4, '__________________________________', align='C')
-        pdf.cell(18, 4, '')
-        pdf.cell(85, 4, '__________________________________', align='C', ln=True)
+    t_partidas = Table(tabla_data, colWidths=[280, 50, 100, 110])
+    t_partidas.setStyle(TableStyle([
+        ('BACKGROUND', (0,0), (-1,0), col_tabla),
+        ('ALIGN', (1,1), (-1,-1), 'CENTER'),
+        ('GRID', (0,0), (-1,-1), 0.5, colors.HexColor("#CBD5E1")),
+        ('ROWBACKGROUNDS', (0,1), (-1,-1), [colors.white, colors.HexColor("#F8FAFC")]),
+        ('TOPPADDING', (0,0), (-1,-1), 5),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 5),
+    ]))
+    story.append(t_partidas)
+    story.append(Spacer(1, 10))
 
-        pdf.set_x(14)
-        pdf.cell(85, 4, config.get("firma_izquierda", "Emitido por"), align='C')
-        pdf.cell(18, 4, '')
-        pdf.cell(85, 4, config.get("firma_derecha", "Recibido de Conformidad"), align='C', ln=True)
+    # TOTALES Y DESGLOSE DE IVA
+    total_num = float(cabecera.get("total", 0.0))
+    anticipo_num = float(cabecera.get("anticipo", 0.0))
+    saldo_num = float(cabecera.get("saldo", 0.0))
 
-    return bytes(pdf.output())
+    totales_data = []
+    if desglosar_iva:
+        subtotal_base = total_num / (1 + (tasa_iva / 100))
+        monto_iva = total_num - subtotal_base
+        totales_data.append([Paragraph(f"Subtotal:", st_cell), Paragraph(f"{simbolo_moneda}{subtotal_base:,.2f}", st_cell)])
+        totales_data.append([Paragraph(f"IVA ({tasa_iva:g}%):", st_cell), Paragraph(f"{simbolo_moneda}{monto_iva:,.2f}", st_cell)])
+        
+    totales_data.append([Paragraph(f"<b>TOTAL:</b>", st_cell), Paragraph(f"<b>{simbolo_moneda}{total_num:,.2f}</b>", st_cell)])
+    totales_data.append([Paragraph(f"Anticipo:", st_cell), Paragraph(f"{simbolo_moneda}{anticipo_num:,.2f}", st_cell)])
+    totales_data.append([Paragraph(f"<b>SALDO PENDIENTE:</b>", st_cell), Paragraph(f"<b>{simbolo_moneda}{saldo_num:,.2f}</b>", st_cell)])
+
+    t_tot = Table(totales_data, colWidths=[130, 90])
+    t_tot.setStyle(TableStyle([
+        ('ALIGN', (0,0), (-1,-1), 'RIGHT'),
+        ('BOX', (0,0), (-1,-1), 1, col_acento),
+        ('BACKGROUND', (0,0), (-1,-1), colors.HexColor("#F8FAFC")),
+        ('TOPPADDING', (0,0), (-1,-1), 3),
+        ('BOTTOMPADDING', (0,0), (-1,-1), 3),
+    ]))
+
+    t_pie = Table([
+        [Paragraph(f"<i>{mensaje_pie}</i>", ParagraphStyle("PieMsg", parent=styles["Normal"], fontName=fuente_familia, fontSize=8, textColor=colors.HexColor("#64748B"))), t_tot]
+    ], colWidths=[310, 230])
+    t_pie.setStyle(TableStyle([('VALIGN', (0,0), (-1,-1), 'TOP')]))
+    story.append(t_pie)
+
+    # FIRMAS
+    if mostrar_firmas:
+        story.append(Spacer(1, 25))
+        t_firmas = Table([
+            [Paragraph("________________________________", st_cell), Paragraph("________________________________", st_cell)],
+            [Paragraph(f"<b>{firma_izq}</b>", st_cell), Paragraph(f"<b>{firma_der}</b>", st_cell)]
+        ], colWidths=[270, 270])
+        t_firmas.setStyle(TableStyle([
+            ('ALIGN', (0,0), (-1,-1), 'CENTER'),
+            ('VALIGN', (0,0), (-1,-1), 'MIDDLE')
+        ]))
+        story.append(t_firmas)
+
+    doc.build(story)
+    buffer.seek(0)
+    return buffer.getvalue()
