@@ -137,9 +137,8 @@ CATALOGO_GIROS = {
     }
 }
 
-# Inyección de estilos adaptados
 u_temp = st.session_state.usuario_activo
-es_usuario_admin = (u_temp and u_temp.get("rol") == "ADMIN")
+es_usuario_admin = bool(u_temp and u_temp.get("rol") == "ADMIN")
 
 if not es_usuario_admin:
     st.markdown("""
@@ -173,7 +172,7 @@ if not es_usuario_admin:
     """, unsafe_allow_html=True)
 
 # =========================================================
-# VISTA: ACCESO
+# VISTA: ACCESO Y REGISTRO (SIN LLAMADAS DE RED BLOQUEANTES)
 # =========================================================
 if not st.session_state.autenticado:
     st.markdown("<h2 style='text-align: center;'>⚡ Generador de Notas & Comprobantes</h2>", unsafe_allow_html=True)
@@ -209,16 +208,18 @@ if not st.session_state.autenticado:
             usr = st.text_input("Usuario")
             pwd = st.text_input("Contraseña", type="password")
             if st.button("Entrar a mi Sistema", use_container_width=True):
-                with st.spinner("Validando..."):
-                    res = db.login_usuario(usr, pwd)
-                if res.get("status") == "success":
-                    st.session_state.autenticado = True
-                    st.session_state.modo_demo = False
-                    st.session_state.usuario_activo = res["user"]
-                    st.session_state.lista_emprendimientos = db.obtener_emprendimientos(res["user"]["usuario"])
-                    st.rerun()
+                if usr and pwd:
+                    with st.spinner("Validando credenciales..."):
+                        res = db.login_usuario(usr.strip(), pwd.strip())
+                    if res.get("status") == "success":
+                        st.session_state.autenticado = True
+                        st.session_state.modo_demo = False
+                        st.session_state.usuario_activo = res["user"]
+                        st.rerun()
+                    else:
+                        st.error(res.get("message", "Usuario o contraseña incorrectos."))
                 else:
-                    st.error("Usuario o contraseña incorrectos.")
+                    st.warning("Escribe tu usuario y contraseña.")
 
         with tab_crear:
             with st.form("form_reg_simple"):
@@ -247,29 +248,31 @@ if not st.session_state.autenticado:
     st.stop()
 
 # =========================================================
-# GESTIÓN DE SESIÓN
+# SESIÓN ACTIVA
 # =========================================================
 u = st.session_state.usuario_activo
 es_admin = (u.get("rol") == "ADMIN")
 plan = u.get("plan", "FREE")
 es_demo = st.session_state.modo_demo
 
-emprendimientos_usuario = st.session_state.lista_emprendimientos
-if not emprendimientos_usuario:
-    emprendimientos_usuario = [{
-        "nombre_comercial": u.get("nombre_comercial", "Mi Negocio"),
-        "giro": u.get("giro", list(CATALOGO_GIROS.keys())[0]),
-        "telefono": u.get("telefono", "")
-    }]
+# Carga de marcas protegida
+if not st.session_state.lista_emprendimientos:
+    if not es_demo:
+        st.session_state.lista_emprendimientos = db.obtener_emprendimientos(u.get("usuario", ""))
+    if not st.session_state.lista_emprendimientos:
+        st.session_state.lista_emprendimientos = [{
+            "nombre_comercial": u.get("nombre_comercial", "Mi Negocio"),
+            "giro": u.get("giro", list(CATALOGO_GIROS.keys())[0]),
+            "telefono": u.get("telefono", "")
+        }]
 
-# Cargar configuración personalizada del PDF si existe
-cfg_guardada = db.obtener_config_pdf(u.get("usuario", ""))
+emprendimientos_usuario = st.session_state.lista_emprendimientos
 
 # Barra superior
 c_top1, c_top2 = st.columns([3.2, 1])
 with c_top1:
     if es_admin:
-        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Asistencia y Personalización Activo")
+        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Asistencia Activo")
     elif es_demo:
         st.warning("🚀 **Modo de Prueba** — Estás probando la plataforma.")
     else:
@@ -312,33 +315,26 @@ with st.sidebar:
         st.caption("🔒 *Logotipo disponible en Plan PRO.*")
         logo_bytes = None
 
-    # Títulos y colores predeterminados o guardados por el admin
-    titulo_def = cfg_guardada["titulo"] if cfg_guardada else preset["titulo"]
-    subtitulo_def = cfg_guardada["subtitulo"] if cfg_guardada else preset["subtitulo"]
-    color_prim_def = cfg_guardada["color_primario"] if cfg_guardada else preset["color_primario"]
-    color_tab_def = cfg_guardada["color_tabla"] if cfg_guardada else preset["color_tabla"]
-    pie_def = cfg_guardada["mensaje_pie"] if cfg_guardada else "Gracias por su preferencia."
-
     if es_admin:
         st.markdown("---")
         st.markdown("### 🎛️ Estudio Avanzado de Diseño")
         with st.expander("📝 Textos y Encabezados", expanded=True):
-            titulo_doc = st.text_input("Título del Documento", value=titulo_def)
-            subtitulo_doc = st.text_input("Subtítulo", value=subtitulo_def)
-            mensaje_pie = st.text_area("Leyenda al Pie", value=pie_def)
+            titulo_doc = st.text_input("Título del Documento", value=preset["titulo"])
+            subtitulo_doc = st.text_input("Subtítulo", value=preset["subtitulo"])
+            mensaje_pie = st.text_area("Leyenda al Pie", value="Gracias por su preferencia.")
 
         with st.expander("🎨 Colores", expanded=True):
-            col_primario = st.color_picker("Color de Acento", color_prim_def)
-            col_tabla = st.color_picker("Fondo Tabla", color_tab_def)
+            col_primario = st.color_picker("Color de Acento", preset["color_primario"])
+            col_tabla = st.color_picker("Fondo Tabla", preset["color_tabla"])
             simbolo_moneda = st.selectbox("Moneda", ["$", "MXN $", "USD $", "EUR €"])
             desglosar_iva = st.toggle("Activar Desglose de IVA", value=False)
             tasa_iva = 16.0 if desglosar_iva else 0.0
     else:
-        titulo_doc = titulo_def
-        subtitulo_doc = subtitulo_def
-        mensaje_pie = pie_def
-        col_primario = color_prim_def
-        col_tabla = color_tab_def
+        titulo_doc = preset["titulo"]
+        subtitulo_doc = preset["subtitulo"]
+        mensaje_pie = "Gracias por su preferencia."
+        col_primario = preset["color_primario"]
+        col_tabla = preset["color_tabla"]
         simbolo_moneda = "$"
         desglosar_iva = False
         tasa_iva = 0.0
@@ -366,25 +362,16 @@ config_pdf_usuario = {
 }
 
 # =========================================================
-# PESTAÑAS PRINCIPALES
+# PESTAÑAS
 # =========================================================
 pestanas_nombres = ["📝 Nueva Nota", "📋 Mis Notas", "🏷️ Catálogo"]
 if es_admin:
-    pestanas_nombres.append("👑 Panel Admin & Asistencia de Clientes")
+    pestanas_nombres.append("👑 Panel Admin & Asistencia")
 
 tabs = st.tabs(pestanas_nombres)
 
-# ---------------------------------------------------------
-# PESTAÑA 1: NUEVA NOTA
-# ---------------------------------------------------------
+# --- PESTAÑA 1: NUEVA NOTA ---
 with tabs[0]:
-    df_propias = db.obtener_ventas(u["usuario"], es_admin=False) if not es_demo else pd.DataFrame()
-    cant_emitidas = len(df_propias)
-
-    if plan == "FREE" and not es_admin and not es_demo and cant_emitidas >= LIMITE_NOTAS_FREE:
-        st.error(f"⚠️ Has alcanzado el límite de {LIMITE_NOTAS_FREE} notas este mes en tu Plan Gratuito.")
-        st.stop()
-
     if st.session_state.nota_recien_creada:
         reciente = st.session_state.nota_recien_creada
         st.success(f"🎉 ¡Nota #{reciente['folio']} creada con éxito!")
@@ -431,33 +418,15 @@ with tabs[0]:
         direccion = st.text_input("Lugar / Sucursal (Opcional)", placeholder="Ej: Cabina 2 / Domicilio")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # Cargar catálogo del usuario para autocompletar si tiene
-        df_cat_propio = db.obtener_productos(u.get("usuario", ""))
-        
         st.markdown("<div class='mobile-card'>", unsafe_allow_html=True)
         st.markdown("### 2️⃣ Conceptos o Servicios")
-        
-        if not df_cat_propio.empty:
-            opc_cat = ["-- Seleccionar de mi catálogo --"] + df_cat_propio["nombre"].tolist()
-            prod_elegido_cat = st.selectbox("Elegir producto/servicio guardado:", opc_cat)
-            if prod_elegido_cat != "-- Seleccionar de mi catálogo --":
-                row_sel = df_cat_propio[df_cat_propio["nombre"] == prod_elegido_cat].iloc[0]
-                def_nom = row_sel["nombre"]
-                def_pre = float(row_sel["precio_venta"])
-            else:
-                def_nom = ""
-                def_pre = 0.0
-        else:
-            def_nom = ""
-            def_pre = 0.0
-
-        prod_nom = st.text_input("Descripción *", value=def_nom, placeholder=preset["placeholder_prod"])
+        prod_nom = st.text_input("Descripción *", placeholder=preset["placeholder_prod"])
         
         c_p1, c_p2 = st.columns(2)
         with c_p1:
             prod_cant = st.number_input("Cantidad", min_value=1, value=1, step=1)
         with c_p2:
-            prod_precio = st.number_input(f"Precio Unitario ({simbolo_moneda})", min_value=0.0, value=def_pre, step=20.0)
+            prod_precio = st.number_input(f"Precio Unitario ({simbolo_moneda})", min_value=0.0, step=20.0)
             
         if st.button("➕ Agregar a la Nota", use_container_width=True, type="secondary"):
             if prod_nom.strip():
@@ -471,7 +440,7 @@ with tabs[0]:
 
         if st.session_state.partidas_actuales:
             st.table(st.session_state.partidas_actuales)
-            if st.button("🗑️ Borrar lista de productos", use_container_width=True):
+            if st.button("🗑️ Borrar productos", use_container_width=True):
                 st.session_state.partidas_actuales = []
                 st.rerun()
         st.markdown("</div>", unsafe_allow_html=True)
@@ -479,12 +448,11 @@ with tabs[0]:
         partidas_render = st.session_state.partidas_actuales if st.session_state.partidas_actuales else [
             {"producto": f"Muestra: {preset['placeholder_prod']}", "cantidad": 1, "precio_unitario": 0.0, "subtotal": 0.0}
         ]
-
         total_venta = sum(item["subtotal"] for item in partidas_render)
 
         st.markdown("<div class='mobile-card'>", unsafe_allow_html=True)
         st.markdown("### 3️⃣ Cobro y Saldo")
-        fecha_entrega = st.date_input("Fecha de Servicio / Entrega", min_value=datetime.date.today())
+        fecha_entrega = st.date_input("Fecha", min_value=datetime.date.today())
         anticipo = st.number_input(f"Anticipo Recibido ({simbolo_moneda})", min_value=0.0, step=50.0)
 
         saldo_pendiente = max(0.0, total_venta - anticipo)
@@ -500,7 +468,7 @@ with tabs[0]:
 
         if st.button("💾 GENERAR Y GUARDAR COMPROBANTE", type="primary", use_container_width=True):
             if not cliente.strip():
-                st.error("⚠️ Por favor escribe el nombre del cliente.")
+                st.error("⚠️ Escribe el nombre del cliente.")
             elif not st.session_state.partidas_actuales:
                 st.error("⚠️ Agrega al menos 1 concepto con el botón ➕.")
             else:
@@ -519,7 +487,7 @@ with tabs[0]:
                     "estado_entrega": "Completado"
                 }
                 if not es_demo:
-                    with st.spinner("Guardando en la nube..."):
+                    with st.spinner("Guardando..."):
                         db.guardar_registro_venta(u["usuario"], cabecera_data, st.session_state.partidas_actuales)
 
                 st.session_state.nota_recien_creada = {
@@ -536,7 +504,7 @@ with tabs[0]:
     with col_preview:
         with st.expander("👁️ Ver Vista Previa del PDF", expanded=es_admin):
             cabecera_preview = {
-                "folio": folio_auto if 'folio_auto' in locals() else "N-001",
+                "folio": folio_auto,
                 "cliente": cliente if cliente.strip() else "Nombre del Cliente",
                 "telefono": telefono if telefono.strip() else "981 000 0000",
                 "direccion": direccion if direccion.strip() else "Mostrador",
@@ -546,9 +514,7 @@ with tabs[0]:
                 "anticipo": anticipo,
                 "saldo": saldo_pendiente
             }
-            
             pdf_bytes_live = pdf_nota.generar_nota_pdf(cabecera_preview, partidas_render, config_personalizada=config_pdf_usuario)
-            
             try:
                 import pypdfium2 as pdfium
                 pdf_doc = pdfium.PdfDocument(pdf_bytes_live)
@@ -556,7 +522,7 @@ with tabs[0]:
                 bitmap = page.render(scale=1.6)
                 st.image(bitmap.to_pil(), use_container_width=True)
             except Exception:
-                st.info("💡 Cambia los datos y descarga el PDF.")
+                st.info("💡 PDF listo para descarga.")
 
             st.download_button(
                 label=f"📄 Descargar Archivo PDF ({simbolo_moneda})",
@@ -566,9 +532,7 @@ with tabs[0]:
                 use_container_width=True
             )
 
-# ---------------------------------------------------------
-# PESTAÑA 2: HISTORIAL
-# ---------------------------------------------------------
+# --- PESTAÑA 2: HISTORIAL ---
 with tabs[1]:
     st.subheader("Historial de Notas")
     if not es_demo:
@@ -586,17 +550,16 @@ with tabs[1]:
     else:
         st.info("El historial se activa al registrar tu cuenta.")
 
-# ---------------------------------------------------------
-# PESTAÑA 3: CATÁLOGO PROPIO
-# ---------------------------------------------------------
+# --- PESTAÑA 3: CATÁLOGO ---
 with tabs[2]:
-    st.subheader("Catálogo de Productos y Servicios")
-    df_cat_ver = db.obtener_productos(u.get("usuario", ""))
-    if not df_cat_ver.empty:
-        st.dataframe(df_cat_ver[["nombre", "precio_venta"]], use_container_width=True)
+    st.subheader("Catálogo de Precios")
+    if not es_demo:
+        df_cat_ver = db.obtener_productos(u.get("usuario", ""))
+        if not df_cat_ver.empty:
+            st.dataframe(df_cat_ver[["nombre", "precio_venta"]], use_container_width=True)
     
     with st.form("form_cat_simple"):
-        p_nom = st.text_input("Nuevo Concepto / Servicio", placeholder="Ej: Uñas Acrílicas")
+        p_nom = st.text_input("Nombre del Servicio o Producto", placeholder="Ej: Uñas Acrílicas")
         p_precio = st.number_input("Precio al Público ($)", min_value=0.0, step=20.0)
             
         if st.form_submit_button("Guardar en Catálogo", use_container_width=True):
@@ -606,19 +569,15 @@ with tabs[2]:
                     st.success(f"'{p_nom}' guardado.")
                     st.rerun()
 
-# ---------------------------------------------------------
-# PESTAÑA 4: PANEL ADMIN & ASISTENCIA REMOTA A CLIENTES
-# ---------------------------------------------------------
+# --- PESTAÑA 4: PANEL ADMIN ---
 if es_admin:
     with tabs[3]:
-        st.subheader("👑 Panel de Control Maestro & Asistencia a Clientes")
-        
+        st.subheader("👑 Panel de Control Maestro & Asistencia")
         df_usuarios = db.admin_obtener_usuarios()
         if not df_usuarios.empty:
             st.dataframe(df_usuarios, use_container_width=True)
             st.markdown("---")
             
-            # 1. SELECTOR DE CLIENTE A GESTIONAR
             lista_clientes = [usr for usr in df_usuarios["usuario"].tolist() if usr != u["usuario"]]
             if not lista_clientes:
                 lista_clientes = df_usuarios["usuario"].tolist()
@@ -626,13 +585,11 @@ if es_admin:
             cliente_seleccionado = st.selectbox("🎯 Selecciona un Cliente para Asistencia:", lista_clientes)
             info_cliente = df_usuarios[df_usuarios["usuario"] == cliente_seleccionado].iloc[0].to_dict()
 
-            tab_lic, tab_diseno_remoto, tab_cat_remoto = st.tabs([
+            tab_lic, tab_cat_remoto = st.tabs([
                 "🔑 Licencia y Suscripción", 
-                "🎨 Diseñar Plantilla PDF del Cliente", 
                 "🏷️ Cargar Catálogo al Cliente"
             ])
 
-            # SUB-TAB 1: LICENCIA
             with tab_lic:
                 st.markdown(f"**Gestionando:** `{cliente_seleccionado}` | Plan actual: **{info_cliente.get('plan')}**")
                 c_u2, c_u3 = st.columns(2)
@@ -646,34 +603,6 @@ if es_admin:
                     st.success(f"¡Suscripción de {cliente_seleccionado} actualizada!")
                     st.rerun()
 
-            # SUB-TAB 2: PERSONALIZAR SU PLANTILLA PDF (COLORES, TÍTULOS, LEYENDAS)
-            with tab_diseno_remoto:
-                st.markdown(f"**Diseño de Plantilla Oficial para:** `{info_cliente.get('nombre_comercial')}` ({cliente_seleccionado})")
-                cfg_actual_cliente = db.obtener_config_pdf(cliente_seleccionado)
-                
-                preset_cliente = CATALOGO_GIROS.get(info_cliente.get("giro"), list(CATALOGO_GIROS.values())[0])
-
-                with st.form("form_diseno_remoto"):
-                    c_d1, c_d2 = st.columns(2)
-                    with c_d1:
-                        rem_titulo = st.text_input("Título del Comprobante", value=cfg_actual_cliente["titulo"] if cfg_actual_cliente else preset_cliente["titulo"])
-                        rem_subtitulo = st.text_input("Subtítulo", value=cfg_actual_cliente["subtitulo"] if cfg_actual_cliente else preset_cliente["subtitulo"])
-                        rem_pie = st.text_area("Leyenda al Pie", value=cfg_actual_cliente["mensaje_pie"] if cfg_actual_cliente else "Gracias por su preferencia.")
-                    with c_d2:
-                        rem_color_prim = st.color_picker("Color de Acento / Franja", cfg_actual_cliente["color_primario"] if cfg_actual_cliente else preset_cliente["color_primario"])
-                        rem_color_tab = st.color_picker("Fondo Encabezado Tabla", cfg_actual_cliente["color_tabla"] if cfg_actual_cliente else preset_cliente["color_tabla"])
-
-                    if st.form_submit_button("🎨 Guardar Plantilla en la Cuenta del Cliente", type="primary"):
-                        db.guardar_config_pdf(cliente_seleccionado, {
-                            "titulo": rem_titulo,
-                            "subtitulo": rem_subtitulo,
-                            "color_primario": rem_color_prim,
-                            "color_tabla": rem_color_tab,
-                            "mensaje_pie": rem_pie
-                        })
-                        st.success(f"¡Plantilla guardada! Cuando {cliente_seleccionado} emita una nota en su celular, saldrá con estos colores y textos.")
-
-            # SUB-TAB 3: CARGARLE PRODUCTOS AL CATÁLOGO DEL CLIENTE
             with tab_cat_remoto:
                 st.markdown(f"**Catálogo de:** `{info_cliente.get('nombre_comercial')}`")
                 df_cat_cliente = db.obtener_productos(cliente_seleccionado)
@@ -683,10 +612,9 @@ if es_admin:
                     st.caption("El cliente aún no tiene productos registrados.")
 
                 with st.form("form_add_prod_remoto"):
-                    st.markdown("#### ➕ Cargar nuevo producto/servicio al cliente:")
                     c_np1, c_np2 = st.columns([3, 1])
                     with c_np1:
-                        np_nom = st.text_input("Nombre del Servicio / Producto", placeholder="Ej: Uñas Esculturales / Pastel Gourmet")
+                        np_nom = st.text_input("Nombre del Servicio / Producto", placeholder="Ej: Uñas Esculturales")
                     with c_np2:
                         np_pre = st.number_input("Precio al Público ($)", min_value=0.0, step=20.0)
 
