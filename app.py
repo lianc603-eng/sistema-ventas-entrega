@@ -6,16 +6,13 @@ import pandas as pd
 import db
 import pdf_nota
 
-# Configuración base
 st.set_page_config(page_title="Sistema Comercial & Notas", layout="wide", page_icon="⚡")
 
-# Configuración comercial y enlaces
 WHATSAPP_ADMIN = "529817360428"
 URL_APP_PUBLICA = "https://sistemaventas1.streamlit.app"
 LIMITE_NOTAS_FREE = 5
 LIMITE_EMPRENDIMIENTOS_PRO = 4
 
-# Inicialización de estado en sesión
 if "autenticado" not in st.session_state:
     st.session_state.autenticado = False
 if "usuario_activo" not in st.session_state:
@@ -140,17 +137,13 @@ CATALOGO_GIROS = {
     }
 }
 
-# =========================================================
-# MOTOR DE ESTILOS: MÓVIL PARA CLIENTES / DESKTOP PARA TI
-# =========================================================
+# Inyección de estilos adaptados
 u_temp = st.session_state.usuario_activo
 es_usuario_admin = (u_temp and u_temp.get("rol") == "ADMIN")
 
 if not es_usuario_admin:
-    # Inyección de estilos móviles para smartphones
     st.markdown("""
     <style>
-        /* Optimización Touch para Celulares */
         @media (max-width: 768px) {
             .block-container {
                 padding-top: 1rem !important;
@@ -164,55 +157,26 @@ if not es_usuario_admin:
                 font-size: 16px !important;
                 font-weight: 700 !important;
                 border-radius: 10px !important;
-                margin-top: 6px !important;
-                margin-bottom: 6px !important;
             }
             input, select, textarea {
-                font-size: 16px !important; /* Evita zoom automático en iPhone */
-            }
-            .stTabs [data-baseweb="tab-list"] {
-                gap: 6px;
-            }
-            .stTabs [data-baseweb="tab"] {
-                padding: 8px 12px !important;
-                font-size: 14px !important;
-            }
-            [data-testid="stMetricValue"] {
-                font-size: 1.4rem !important;
+                font-size: 16px !important;
             }
         }
-        /* Tarjetas limpias en móvil */
         .mobile-card {
             background-color: #FFFFFF;
             border: 1px solid #E2E8F0;
             border-radius: 12px;
             padding: 14px;
             margin-bottom: 14px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        }
-    </style>
-    """, unsafe_allow_html=True)
-else:
-    # Estilos limpios para Desktop / Laptop
-    st.markdown("""
-    <style>
-        .block-container {
-            padding-top: 1.5rem !important;
-            padding-bottom: 3rem !important;
-        }
-        .stButton > button {
-            border-radius: 6px !important;
-            font-weight: 600 !important;
         }
     </style>
     """, unsafe_allow_html=True)
 
 # =========================================================
-# VISTA: ACCESO AMIGABLE Y DIRECTO
+# VISTA: ACCESO
 # =========================================================
 if not st.session_state.autenticado:
     st.markdown("<h2 style='text-align: center;'>⚡ Generador de Notas & Comprobantes</h2>", unsafe_allow_html=True)
-    st.markdown("<p style='text-align: center; color: #64748B; font-size: 15px;'>Crea notas y cotizaciones profesionales en PDF listas para enviar por WhatsApp.</p>", unsafe_allow_html=True)
     st.write("")
 
     col_acc1, col_acc2, col_acc3 = st.columns([1, 1.3, 1])
@@ -237,14 +201,14 @@ if not st.session_state.autenticado:
             }]
             st.rerun()
 
-        st.markdown("<div style='text-align:center; margin: 12px 0; color: #94A3B8; font-size: 14px;'>— o accede a tu cuenta —</div>", unsafe_allow_html=True)
+        st.markdown("<div style='text-align:center; margin: 12px 0; color: #94A3B8;'>— o accede a tu cuenta —</div>", unsafe_allow_html=True)
 
         tab_ingresar, tab_crear = st.tabs(["🔑 Iniciar Sesión", "✨ Crear Cuenta"])
 
         with tab_ingresar:
-            usr = st.text_input("Usuario o Correo")
+            usr = st.text_input("Usuario")
             pwd = st.text_input("Contraseña", type="password")
-            if st.button("Entrar a mi Sistema", use_container_width=True, type="secondary"):
+            if st.button("Entrar a mi Sistema", use_container_width=True):
                 with st.spinner("Validando..."):
                     res = db.login_usuario(usr, pwd)
                 if res.get("status") == "success":
@@ -258,13 +222,13 @@ if not st.session_state.autenticado:
 
         with tab_crear:
             with st.form("form_reg_simple"):
-                r_nom = st.text_input("Nombre de tu Negocio / Marca", placeholder="Ej: Nails Studio / Postres Lili")
+                r_nom = st.text_input("Nombre de tu Negocio", placeholder="Ej: Nails Studio")
                 r_giro = st.selectbox("Giro Comercial", list(CATALOGO_GIROS.keys()))
                 r_tel = st.text_input("WhatsApp de Contacto", placeholder="Ej: 9811234567")
                 r_usr = st.text_input("Crea un Usuario (sin espacios)", placeholder="Ej: mi_negocio")
                 r_pwd = st.text_input("Crea una Contraseña", type="password")
                 
-                if st.form_submit_button("Crear Cuenta Gratis (1 Día PRO)", type="primary", use_container_width=True):
+                if st.form_submit_button("Crear Cuenta Gratis", type="primary", use_container_width=True):
                     if r_nom and r_usr and r_pwd:
                         with st.spinner("Creando cuenta..."):
                             res_reg = db.registrar_usuario({
@@ -298,13 +262,16 @@ if not emprendimientos_usuario:
         "telefono": u.get("telefono", "")
     }]
 
+# Cargar configuración personalizada del PDF si existe
+cfg_guardada = db.obtener_config_pdf(u.get("usuario", ""))
+
 # Barra superior
 c_top1, c_top2 = st.columns([3.2, 1])
 with c_top1:
     if es_admin:
-        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Desktop & Estudio Avanzado Activo")
+        st.info(f"👑 **Super Administrador:** `{u['usuario']}` · Modo Asistencia y Personalización Activo")
     elif es_demo:
-        st.warning("🚀 **Modo de Prueba** — Estás probando la plataforma en tu dispositivo.")
+        st.warning("🚀 **Modo de Prueba** — Estás probando la plataforma.")
     else:
         badge = "🔥 PRO Ilimitado" if plan == "PRO" else f"🌱 Plan Gratuito ({LIMITE_NOTAS_FREE} notas/mes)"
         st.markdown(f"🏢 **{u['nombre_comercial']}** · {badge}")
@@ -318,22 +285,8 @@ with c_top2:
         st.session_state.nota_recien_creada = None
         st.rerun()
 
-# Banner amigable para usuarios FREE
-if plan == "FREE" and not es_admin and not es_demo:
-    msg_up = f"Hola, soy {u.get('usuario')}. Quiero activar el Plan PRO ($199 MXN) y cotizar el servicio de personalización oficial de mi marca."
-    link_wsp_upgrade = f"https://wa.me/{WHATSAPP_ADMIN}?text={urllib.parse.quote(msg_up)}"
-    st.markdown(f"""
-    <div style="background-color: #FEF3C7; border-radius: 8px; padding: 10px 14px; margin-bottom: 12px; display: flex; flex-direction: column; gap: 6px;">
-        <span style="color: #92400E; font-size: 13px; font-weight: 600;">⭐ <b>Plan Gratuito:</b> {LIMITE_NOTAS_FREE} notas al mes.</span>
-        <span style="color: #B45309; font-size: 12px;">¿Quieres notas ilimitadas o que personalicemos la plantilla con tu logotipo?</span>
-        <a href="{link_wsp_upgrade}" target="_blank" style="background-color: #25D366; color: white; padding: 8px 12px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 13px; text-align: center; display: inline-block;">
-            💬 Activar Plan PRO ($199 MXN)
-        </a>
-    </div>
-    """, unsafe_allow_html=True)
-
 # =========================================================
-# MENÚ LATERAL: COMPLETO EN LAPTOP / SIMPLE EN MÓVIL
+# MENÚ LATERAL
 # =========================================================
 with st.sidebar:
     st.header("⚙️ Configuración")
@@ -359,67 +312,36 @@ with st.sidebar:
         st.caption("🔒 *Logotipo disponible en Plan PRO.*")
         logo_bytes = None
 
-    # Si eres Admin en laptop: Todas las herramientas desplegadas
+    # Títulos y colores predeterminados o guardados por el admin
+    titulo_def = cfg_guardada["titulo"] if cfg_guardada else preset["titulo"]
+    subtitulo_def = cfg_guardada["subtitulo"] if cfg_guardada else preset["subtitulo"]
+    color_prim_def = cfg_guardada["color_primario"] if cfg_guardada else preset["color_primario"]
+    color_tab_def = cfg_guardada["color_tabla"] if cfg_guardada else preset["color_tabla"]
+    pie_def = cfg_guardada["mensaje_pie"] if cfg_guardada else "Gracias por su preferencia."
+
     if es_admin:
         st.markdown("---")
         st.markdown("### 🎛️ Estudio Avanzado de Diseño")
-        
         with st.expander("📝 Textos y Encabezados", expanded=True):
-            titulo_doc = st.text_input("Título del Documento", value=preset["titulo"])
-            subtitulo_doc = st.text_input("Subtítulo", value=preset["subtitulo"])
-            lbl_fecha = st.text_input("Etiqueta Fecha", value=preset["etiqueta_fecha"])
-            lbl_lugar = st.text_input("Etiqueta Lugar/Sucursal", value=preset["etiqueta_lugar"])
-            lbl_detalle = st.text_input("Etiqueta Tabla", value=preset["etiqueta_detalle"])
-            mensaje_pie = st.text_area("Leyenda al Pie", value="Gracias por su preferencia. Favor de verificar sus servicios/productos.")
+            titulo_doc = st.text_input("Título del Documento", value=titulo_def)
+            subtitulo_doc = st.text_input("Subtítulo", value=subtitulo_def)
+            mensaje_pie = st.text_area("Leyenda al Pie", value=pie_def)
 
-        with st.expander("🎨 Paleta de Colores Hexadecimal", expanded=True):
-            col_fondo = st.color_picker("Fondo de la Hoja", "#FFFFFF")
-            col_primario = st.color_picker("Color de Acento / Franja", preset["color_primario"])
-            col_tabla = st.color_picker("Fondo Encabezado Tabla", preset["color_tabla"])
-            col_texto_tabla = st.color_picker("Texto Encabezado Tabla", "#FFFFFF")
-
-        with st.expander("💲 Moneda e Impuestos", expanded=True):
+        with st.expander("🎨 Colores", expanded=True):
+            col_primario = st.color_picker("Color de Acento", color_prim_def)
+            col_tabla = st.color_picker("Fondo Tabla", color_tab_def)
             simbolo_moneda = st.selectbox("Moneda", ["$", "MXN $", "USD $", "EUR €"])
             desglosar_iva = st.toggle("Activar Desglose de IVA", value=False)
-            tasa_iva = st.number_input("Tasa IVA (%)", min_value=0.0, value=16.0) if desglosar_iva else 0.0
-
-        with st.expander("✍️ Firmas de Conformidad", expanded=True):
-            mostrar_firmas = st.checkbox("Incluir bloque de firmas", value=True)
-            firma_izq = st.text_input("Firma Izquierda", value=preset["firma_izq"])
-            firma_der = st.text_input("Firma Derecha", value=preset["firma_der"])
-
-    # Si es cliente en móvil: opciones limpias y discretas
-    else:
-        with st.expander("🛠️ Personalización Opcional", expanded=False):
-            titulo_doc = st.text_input("Título", value=preset["titulo"])
-            simbolo_moneda = st.selectbox("Moneda", ["$", "MXN $", "USD $", "EUR €"])
-            col_primario = st.color_picker("Color de acento", preset["color_primario"])
-            mensaje_pie = st.text_area("Leyenda al pie", value="Favor de revisar sus productos/servicios.")
-            desglosar_iva = st.toggle("Desglosar IVA (16%)", value=False) if es_pro_o_trial else False
             tasa_iva = 16.0 if desglosar_iva else 0.0
-
-        subtitulo_doc = preset["subtitulo"]
-        lbl_fecha = preset["etiqueta_fecha"]
-        lbl_lugar = preset["etiqueta_lugar"]
-        lbl_detalle = preset["etiqueta_detalle"]
-        col_fondo = "#FFFFFF"
-        col_tabla = preset["color_tabla"]
-        col_texto_tabla = "#FFFFFF"
-        mostrar_firmas = True
-        firma_izq = preset["firma_izq"]
-        firma_der = preset["firma_der"]
-
-    if es_pro_o_trial and len(emprendimientos_usuario) < LIMITE_EMPRENDIMIENTOS_PRO and not es_demo:
-        with st.expander("➕ Agregar otra marca (Hasta 4)", expanded=False):
-            with st.form("form_nueva_marca"):
-                m_nom = st.text_input("Nombre de la nueva marca")
-                m_giro = st.selectbox("Giro", list(CATALOGO_GIROS.keys()))
-                m_tel = st.text_input("WhatsApp")
-                if st.form_submit_button("Guardar Marca"):
-                    if m_nom.strip():
-                        db.guardar_emprendimiento(u["usuario"], {"nombre_comercial": m_nom.strip(), "giro": m_giro, "telefono": m_tel.strip()})
-                        st.session_state.lista_emprendimientos = db.obtener_emprendimientos(u["usuario"])
-                        st.rerun()
+    else:
+        titulo_doc = titulo_def
+        subtitulo_doc = subtitulo_def
+        mensaje_pie = pie_def
+        col_primario = color_prim_def
+        col_tabla = color_tab_def
+        simbolo_moneda = "$"
+        desglosar_iva = False
+        tasa_iva = 0.0
 
 config_pdf_usuario = {
     "titulo_documento": titulo_doc,
@@ -427,17 +349,17 @@ config_pdf_usuario = {
     "nombre_negocio": negocio_nombre,
     "contacto_negocio": negocio_contacto,
     "mensaje_pie": mensaje_pie,
-    "etiqueta_fecha_operativa": lbl_fecha,
-    "etiqueta_lugar_operativo": lbl_lugar,
-    "etiqueta_detalle": lbl_detalle,
-    "firma_izquierda": firma_izq,
-    "firma_derecha": firma_der,
+    "etiqueta_fecha_operativa": preset["etiqueta_fecha"],
+    "etiqueta_lugar_operativo": preset["etiqueta_lugar"],
+    "etiqueta_detalle": preset["etiqueta_detalle"],
+    "firma_izquierda": preset["firma_izq"],
+    "firma_derecha": preset["firma_der"],
     "moneda": simbolo_moneda,
-    "color_fondo_hoja": col_fondo,
+    "color_fondo_hoja": "#FFFFFF",
     "color_primario": col_primario,
     "color_tabla_fondo": col_tabla,
-    "color_tabla_texto": col_texto_tabla,
-    "mostrar_firmas": mostrar_firmas,
+    "color_tabla_texto": "#FFFFFF",
+    "mostrar_firmas": True,
     "desglosar_iva": desglosar_iva,
     "tasa_iva": tasa_iva,
     "logo_bytes": logo_bytes
@@ -446,14 +368,14 @@ config_pdf_usuario = {
 # =========================================================
 # PESTAÑAS PRINCIPALES
 # =========================================================
-pestanas_nombres = ["📝 Nueva Nota", "📋 Mis Notas", "🏷️ Precios"]
+pestanas_nombres = ["📝 Nueva Nota", "📋 Mis Notas", "🏷️ Catálogo"]
 if es_admin:
-    pestanas_nombres.append("👑 Panel Admin & Estudio")
+    pestanas_nombres.append("👑 Panel Admin & Asistencia de Clientes")
 
 tabs = st.tabs(pestanas_nombres)
 
 # ---------------------------------------------------------
-# PESTAÑA 1: CREAR NOTA (ADAPTADA 100% PARA MÓVIL)
+# PESTAÑA 1: NUEVA NOTA
 # ---------------------------------------------------------
 with tabs[0]:
     df_propias = db.obtener_ventas(u["usuario"], es_admin=False) if not es_demo else pd.DataFrame()
@@ -461,7 +383,6 @@ with tabs[0]:
 
     if plan == "FREE" and not es_admin and not es_demo and cant_emitidas >= LIMITE_NOTAS_FREE:
         st.error(f"⚠️ Has alcanzado el límite de {LIMITE_NOTAS_FREE} notas este mes en tu Plan Gratuito.")
-        st.info("Para seguir creando notas ilimitadas, activa tu Plan PRO por solo $199 MXN.")
         st.stop()
 
     if st.session_state.nota_recien_creada:
@@ -496,7 +417,6 @@ with tabs[0]:
 
         st.markdown("---")
 
-    # En Desktop para Admin: Vista 2 Columnas / En Móvil para Clientes: Flujo Vertical Fluido
     if es_admin:
         col_form, col_preview = st.columns([1.15, 0.85])
     else:
@@ -504,7 +424,6 @@ with tabs[0]:
         col_preview = st.container()
 
     with col_form:
-        # PASO 1: DATOS CLIENTE
         st.markdown("<div class='mobile-card'>", unsafe_allow_html=True)
         st.markdown("### 1️⃣ Datos del Cliente")
         cliente = st.text_input("Nombre del Cliente *", placeholder="Ej: María González")
@@ -512,16 +431,33 @@ with tabs[0]:
         direccion = st.text_input("Lugar / Sucursal (Opcional)", placeholder="Ej: Cabina 2 / Domicilio")
         st.markdown("</div>", unsafe_allow_html=True)
 
-        # PASO 2: CONCEPTOS
+        # Cargar catálogo del usuario para autocompletar si tiene
+        df_cat_propio = db.obtener_productos(u.get("usuario", ""))
+        
         st.markdown("<div class='mobile-card'>", unsafe_allow_html=True)
-        st.markdown("### 2️⃣ ¿Qué vendiste o qué servicio realizaste?")
-        prod_nom = st.text_input("Descripción del Servicio/Producto *", placeholder=preset["placeholder_prod"])
+        st.markdown("### 2️⃣ Conceptos o Servicios")
+        
+        if not df_cat_propio.empty:
+            opc_cat = ["-- Seleccionar de mi catálogo --"] + df_cat_propio["nombre"].tolist()
+            prod_elegido_cat = st.selectbox("Elegir producto/servicio guardado:", opc_cat)
+            if prod_elegido_cat != "-- Seleccionar de mi catálogo --":
+                row_sel = df_cat_propio[df_cat_propio["nombre"] == prod_elegido_cat].iloc[0]
+                def_nom = row_sel["nombre"]
+                def_pre = float(row_sel["precio_venta"])
+            else:
+                def_nom = ""
+                def_pre = 0.0
+        else:
+            def_nom = ""
+            def_pre = 0.0
+
+        prod_nom = st.text_input("Descripción *", value=def_nom, placeholder=preset["placeholder_prod"])
         
         c_p1, c_p2 = st.columns(2)
         with c_p1:
             prod_cant = st.number_input("Cantidad", min_value=1, value=1, step=1)
         with c_p2:
-            prod_precio = st.number_input(f"Precio Unitario ({simbolo_moneda})", min_value=0.0, step=20.0)
+            prod_precio = st.number_input(f"Precio Unitario ({simbolo_moneda})", min_value=0.0, value=def_pre, step=20.0)
             
         if st.button("➕ Agregar a la Nota", use_container_width=True, type="secondary"):
             if prod_nom.strip():
@@ -546,11 +482,10 @@ with tabs[0]:
 
         total_venta = sum(item["subtotal"] for item in partidas_render)
 
-        # PASO 3: COBRO Y SALDO
         st.markdown("<div class='mobile-card'>", unsafe_allow_html=True)
         st.markdown("### 3️⃣ Cobro y Saldo")
         fecha_entrega = st.date_input("Fecha de Servicio / Entrega", min_value=datetime.date.today())
-        anticipo = st.number_input(f"Anticipo o Adelanto Recibido ({simbolo_moneda})", min_value=0.0, step=50.0)
+        anticipo = st.number_input(f"Anticipo Recibido ({simbolo_moneda})", min_value=0.0, step=50.0)
 
         saldo_pendiente = max(0.0, total_venta - anticipo)
         estado_pago = "Liquidado" if saldo_pendiente == 0.0 else ("Anticipo" if anticipo > 0 else "Pendiente")
@@ -632,7 +567,7 @@ with tabs[0]:
             )
 
 # ---------------------------------------------------------
-# PESTAÑA 2: MIS NOTAS
+# PESTAÑA 2: HISTORIAL
 # ---------------------------------------------------------
 with tabs[1]:
     st.subheader("Historial de Notas")
@@ -642,8 +577,6 @@ with tabs[1]:
             st.info("Aún no tienes notas guardadas.")
         else:
             st.dataframe(df_mis_ventas[["folio", "fecha_registro", "cliente", "telefono", "total", "anticipo", "saldo", "estado_pago"]], use_container_width=True)
-            st.markdown("---")
-            
             folio_sel = st.selectbox("Selecciona una nota para descargar:", df_mis_ventas["folio"].tolist())
             if folio_sel:
                 df_det = db.obtener_detalle_folio(folio_sel)
@@ -654,12 +587,16 @@ with tabs[1]:
         st.info("El historial se activa al registrar tu cuenta.")
 
 # ---------------------------------------------------------
-# PESTAÑA 3: PRECIOS
+# PESTAÑA 3: CATÁLOGO PROPIO
 # ---------------------------------------------------------
 with tabs[2]:
-    st.subheader("Catálogo de Precios")
+    st.subheader("Catálogo de Productos y Servicios")
+    df_cat_ver = db.obtener_productos(u.get("usuario", ""))
+    if not df_cat_ver.empty:
+        st.dataframe(df_cat_ver[["nombre", "precio_venta"]], use_container_width=True)
+    
     with st.form("form_cat_simple"):
-        p_nom = st.text_input("Nombre del Servicio o Producto", placeholder="Ej: Uñas Acrílicas / Pastel 3 Leches")
+        p_nom = st.text_input("Nuevo Concepto / Servicio", placeholder="Ej: Uñas Acrílicas")
         p_precio = st.number_input("Precio al Público ($)", min_value=0.0, step=20.0)
             
         if st.form_submit_button("Guardar en Catálogo", use_container_width=True):
@@ -667,67 +604,99 @@ with tabs[2]:
                 if not es_demo:
                     db.guardar_producto(u["usuario"], {"nombre": p_nom.strip(), "costo_base": p_precio, "margen_porcentaje": 0, "precio_venta": p_precio})
                     st.success(f"'{p_nom}' guardado.")
-                else:
-                    st.info("Guardado en modo demo.")
+                    st.rerun()
 
 # ---------------------------------------------------------
-# PESTAÑA 4: PANEL ADMIN (SOLO PARA TI EN TU LAPTOP)
+# PESTAÑA 4: PANEL ADMIN & ASISTENCIA REMOTA A CLIENTES
 # ---------------------------------------------------------
 if es_admin:
     with tabs[3]:
-        st.subheader("👑 Panel Maestro de Control & Estudio de Diseño")
+        st.subheader("👑 Panel de Control Maestro & Asistencia a Clientes")
         
-        # Compartir enlace por WhatsApp
-        msg_prospecto = f"¡Hola! Te comparto este generador de notas y comprobantes en PDF para tu negocio. Puedes probarlo gratis aquí: {URL_APP_PUBLICA}"
-        link_wsp_share = f"https://wa.me/?text={urllib.parse.quote(msg_prospecto)}"
-        st.markdown(f"""
-        <a href="{link_wsp_share}" target="_blank" style="background-color: #25D366; color: white; padding: 10px 18px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block; margin-bottom: 15px;">
-            📲 Compartir Enlace a un Prospecto por WhatsApp
-        </a>
-        """, unsafe_allow_html=True)
-
         df_usuarios = db.admin_obtener_usuarios()
         if not df_usuarios.empty:
             st.dataframe(df_usuarios, use_container_width=True)
             st.markdown("---")
             
-            # Control de Licencias
-            st.markdown("### 🔑 Activar o Renovar Suscripciones")
-            c_u1, c_u2, c_u3 = st.columns(3)
-            with c_u1:
-                u_elegido = st.selectbox("Usuario a gestionar:", df_usuarios["usuario"].tolist())
-            with c_u2:
-                nuevo_plan = st.selectbox("Plan:", ["PRO", "FREE"])
-            with c_u3:
-                dias_extender = st.number_input("Sumar Días (Mes = 30):", min_value=0, value=30, step=30)
+            # 1. SELECTOR DE CLIENTE A GESTIONAR
+            lista_clientes = [usr for usr in df_usuarios["usuario"].tolist() if usr != u["usuario"]]
+            if not lista_clientes:
+                lista_clientes = df_usuarios["usuario"].tolist()
                 
-            if st.button("💾 Guardar Licencia del Cliente", type="primary"):
-                db.admin_actualizar_plan_suscripcion(u_elegido, "CLIENTE", nuevo_plan, dias_extender, "ACTIVA")
-                st.success(f"¡Suscripción de {u_elegido} actualizada!")
-                st.rerun()
+            cliente_seleccionado = st.selectbox("🎯 Selecciona un Cliente para Asistencia:", lista_clientes)
+            info_cliente = df_usuarios[df_usuarios["usuario"] == cliente_seleccionado].iloc[0].to_dict()
 
-            st.markdown("---")
-            # Servicio de Personalización
-            st.markdown("### 🎨 Servicio Extra: Personalizar Plantilla para un Cliente")
-            st.caption("Cobro sugerido: $300 - $800 MXN por dejar el sistema llave en mano.")
-            
-            with st.form("form_servicio_personalizacion"):
-                st.markdown(f"**Personalizando para el usuario:** `{u_elegido}`")
-                p_c1, p_c2 = st.columns(2)
-                with p_c1:
-                    cust_nombre = st.text_input("Nombre Oficial de la Marca", placeholder="Ej: Bella Studio & Nails")
-                    cust_tel = st.text_input("WhatsApp de la Marca", placeholder="Ej: 981 123 4567")
-                    cust_giro = st.selectbox("Giro Comercial", list(CATALOGO_GIROS.keys()))
-                with p_c2:
-                    st.info("💡 Este cambio actualizará el negocio del cliente para que cuando él inicie sesión en su teléfono, ya tenga todo listo.")
+            tab_lic, tab_diseno_remoto, tab_cat_remoto = st.tabs([
+                "🔑 Licencia y Suscripción", 
+                "🎨 Diseñar Plantilla PDF del Cliente", 
+                "🏷️ Cargar Catálogo al Cliente"
+            ])
 
-                if st.form_submit_button("🎨 Guardar Identidad al Cliente", type="primary"):
-                    if cust_nombre.strip():
-                        db.guardar_emprendimiento(u_elegido, {
-                            "nombre_comercial": cust_nombre.strip(),
-                            "giro": cust_giro,
-                            "telefono": cust_tel.strip()
+            # SUB-TAB 1: LICENCIA
+            with tab_lic:
+                st.markdown(f"**Gestionando:** `{cliente_seleccionado}` | Plan actual: **{info_cliente.get('plan')}**")
+                c_u2, c_u3 = st.columns(2)
+                with c_u2:
+                    nuevo_plan = st.selectbox("Plan Asignado:", ["PRO", "FREE"], key="plan_adm")
+                with c_u3:
+                    dias_extender = st.number_input("Sumar Días (Mes = 30):", min_value=0, value=30, step=30, key="dias_adm")
+                    
+                if st.button("💾 Actualizar Suscripción del Cliente", type="primary"):
+                    db.admin_actualizar_plan_suscripcion(cliente_seleccionado, "CLIENTE", nuevo_plan, dias_extender, "ACTIVA")
+                    st.success(f"¡Suscripción de {cliente_seleccionado} actualizada!")
+                    st.rerun()
+
+            # SUB-TAB 2: PERSONALIZAR SU PLANTILLA PDF (COLORES, TÍTULOS, LEYENDAS)
+            with tab_diseno_remoto:
+                st.markdown(f"**Diseño de Plantilla Oficial para:** `{info_cliente.get('nombre_comercial')}` ({cliente_seleccionado})")
+                cfg_actual_cliente = db.obtener_config_pdf(cliente_seleccionado)
+                
+                preset_cliente = CATALOGO_GIROS.get(info_cliente.get("giro"), list(CATALOGO_GIROS.values())[0])
+
+                with st.form("form_diseno_remoto"):
+                    c_d1, c_d2 = st.columns(2)
+                    with c_d1:
+                        rem_titulo = st.text_input("Título del Comprobante", value=cfg_actual_cliente["titulo"] if cfg_actual_cliente else preset_cliente["titulo"])
+                        rem_subtitulo = st.text_input("Subtítulo", value=cfg_actual_cliente["subtitulo"] if cfg_actual_cliente else preset_cliente["subtitulo"])
+                        rem_pie = st.text_area("Leyenda al Pie", value=cfg_actual_cliente["mensaje_pie"] if cfg_actual_cliente else "Gracias por su preferencia.")
+                    with c_d2:
+                        rem_color_prim = st.color_picker("Color de Acento / Franja", cfg_actual_cliente["color_primario"] if cfg_actual_cliente else preset_cliente["color_primario"])
+                        rem_color_tab = st.color_picker("Fondo Encabezado Tabla", cfg_actual_cliente["color_tabla"] if cfg_actual_cliente else preset_cliente["color_tabla"])
+
+                    if st.form_submit_button("🎨 Guardar Plantilla en la Cuenta del Cliente", type="primary"):
+                        db.guardar_config_pdf(cliente_seleccionado, {
+                            "titulo": rem_titulo,
+                            "subtitulo": rem_subtitulo,
+                            "color_primario": rem_color_prim,
+                            "color_tabla": rem_color_tab,
+                            "mensaje_pie": rem_pie
                         })
-                        st.success(f"¡Identidad guardada para {u_elegido}!")
-                    else:
-                        st.error("Ingresa el nombre de la marca.")
+                        st.success(f"¡Plantilla guardada! Cuando {cliente_seleccionado} emita una nota en su celular, saldrá con estos colores y textos.")
+
+            # SUB-TAB 3: CARGARLE PRODUCTOS AL CATÁLOGO DEL CLIENTE
+            with tab_cat_remoto:
+                st.markdown(f"**Catálogo de:** `{info_cliente.get('nombre_comercial')}`")
+                df_cat_cliente = db.obtener_productos(cliente_seleccionado)
+                if not df_cat_cliente.empty:
+                    st.dataframe(df_cat_cliente[["nombre", "precio_venta"]], use_container_width=True)
+                else:
+                    st.caption("El cliente aún no tiene productos registrados.")
+
+                with st.form("form_add_prod_remoto"):
+                    st.markdown("#### ➕ Cargar nuevo producto/servicio al cliente:")
+                    c_np1, c_np2 = st.columns([3, 1])
+                    with c_np1:
+                        np_nom = st.text_input("Nombre del Servicio / Producto", placeholder="Ej: Uñas Esculturales / Pastel Gourmet")
+                    with c_np2:
+                        np_pre = st.number_input("Precio al Público ($)", min_value=0.0, step=20.0)
+
+                    if st.form_submit_button("💾 Agregar Producto a la Cuenta del Cliente"):
+                        if np_nom.strip():
+                            db.guardar_producto(cliente_seleccionado, {
+                                "nombre": np_nom.strip(),
+                                "costo_base": np_pre,
+                                "margen_porcentaje": 0,
+                                "precio_venta": np_pre
+                            })
+                            st.success(f"¡'{np_nom}' agregado al catálogo de {cliente_seleccionado}!")
+                            st.rerun()
