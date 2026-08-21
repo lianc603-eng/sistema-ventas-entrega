@@ -17,12 +17,9 @@ def request_cloud(payload: dict):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-# --- AUTENTICACIÓN, GOOGLE Y REGISTRO ---
+# --- AUTENTICACIÓN ---
 def registrar_usuario(usuario_data: dict):
     return request_cloud({"tipo": "registro_usuario", "usuario_data": usuario_data})
-
-def registrar_google(usuario_data: dict):
-    return request_cloud({"tipo": "registro_google", "usuario_data": usuario_data})
 
 def login_usuario(usuario: str, password: str):
     return request_cloud({"tipo": "login", "usuario": usuario, "password": password})
@@ -41,28 +38,41 @@ def guardar_emprendimiento(usuario: str, emprendimiento: dict):
         "emprendimiento": emprendimiento
     })
 
-# --- CANAL DE SUGERENCIAS / FEEDBACK ---
-def guardar_feedback(usuario: str, feedback: dict):
+# --- CATÁLOGO DE PRODUCTOS (POR USUARIO) ---
+def guardar_producto(usuario_activo: str, producto: dict):
     return request_cloud({
-        "tipo": "guardar_feedback",
-        "usuario": usuario,
-        "feedback": feedback
+        "tipo": "nuevo_producto",
+        "usuario_activo": usuario_activo,
+        "producto": producto
     })
 
-# --- OPERACIONES COMERCIALES ---
+def obtener_productos(usuario_activo: str):
+    res = request_cloud({"tipo": "obtener_productos", "usuario_activo": usuario_activo})
+    if res.get("status") == "success" and res.get("data"):
+        return pd.DataFrame(res["data"])
+    return pd.DataFrame()
+
+# --- CONFIGURACIÓN DE PLANTILLA PDF POR USUARIO ---
+def guardar_config_pdf(usuario_destino: str, config: dict):
+    return request_cloud({
+        "tipo": "guardar_config_pdf",
+        "usuario_destino": usuario_destino,
+        "config": config
+    })
+
+def obtener_config_pdf(usuario: str):
+    res = request_cloud({"tipo": "obtener_config_pdf", "usuario": usuario})
+    if res.get("status") == "success":
+        return res.get("data")
+    return None
+
+# --- VENTAS Y COMPROBANTES ---
 def guardar_registro_venta(usuario_activo: str, cabecera: dict, partidas: list):
     return request_cloud({
         "tipo": "nueva_venta",
         "usuario_activo": usuario_activo,
         "cabecera": cabecera,
         "partidas": partidas
-    })
-
-def guardar_producto(usuario_activo: str, producto: dict):
-    return request_cloud({
-        "tipo": "nuevo_producto",
-        "usuario_activo": usuario_activo,
-        "producto": producto
     })
 
 def obtener_ventas(usuario_activo: str, es_admin: bool = False):
@@ -77,7 +87,7 @@ def obtener_detalle_folio(folio: str):
         return pd.DataFrame(res["data"])
     return pd.DataFrame()
 
-# --- MÓDULO ADMINISTRADOR ---
+# --- PANEL ADMIN ---
 def admin_obtener_usuarios():
     res = request_cloud({"tipo": "admin_obtener_usuarios"})
     if res.get("status") == "success" and res.get("data"):
